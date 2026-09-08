@@ -36,7 +36,8 @@ namespace SolarNet.BluetoothClassic
             string successorDeviceAddress = null,
             string serviceName = "SolarNet",
             string serviceUuid = BluetoothClassicTransportOptions.DefaultServiceUuid,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            Action<BluetoothClassicTransport> configureTransport = null)
         {
             if (currentTransport == null) throw new ArgumentNullException(nameof(currentTransport));
             if (adapter == null) throw new ArgumentNullException(nameof(adapter));
@@ -52,6 +53,7 @@ namespace SolarNet.BluetoothClassic
                 currentTransport.LocalPeerId,
                 adapter,
                 new BluetoothClassicTransportOptions(role, serviceName, serviceUuid));
+            if (configureTransport != null) configureTransport(next);
             await next.StartAsync(cancellationToken).ConfigureAwait(false);
 
             var requiresAddress = !isSuccessor && string.IsNullOrWhiteSpace(successorDeviceAddress);

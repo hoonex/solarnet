@@ -14,6 +14,8 @@ namespace SolarNet.BluetoothClassic
         private readonly BluetoothClassicTransportOptions _options;
         private readonly Dictionary<string, string> _connectionToPeer = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, string> _peerToConnection = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _connectionToDeviceAddress = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _peerToLastDeviceAddress = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly SemaphoreSlim _lifecycle = new SemaphoreSlim(1, 1);
         private bool _started;
 
@@ -34,6 +36,13 @@ namespace SolarNet.BluetoothClassic
         public IReadOnlyList<BluetoothClassicDevice> GetBondedDevices()
         {
             return _adapter.GetBondedDevices();
+        }
+
+        public bool TryGetLastKnownDeviceAddress(string remotePeerId, out string deviceAddress)
+        {
+            deviceAddress = null;
+            if (string.IsNullOrWhiteSpace(remotePeerId)) return false;
+            lock (_gate) return _peerToLastDeviceAddress.TryGetValue(remotePeerId, out deviceAddress);
         }
 
         public async Task StartAsync(CancellationToken cancellationToken = default(CancellationToken))
@@ -78,6 +87,8 @@ namespace SolarNet.BluetoothClassic
                 {
                     _connectionToPeer.Clear();
                     _peerToConnection.Clear();
+                    _connectionToDeviceAddress.Clear();
+                    _peerToLastDeviceAddress.Clear();
                 }
             }
             finally
@@ -143,6 +154,16 @@ namespace SolarNet.BluetoothClassic
 
         private void OnConnected(string connectionId, string deviceAddress, string deviceName)
         {
+            if (!string.IsNullOrWhiteSpace(connectionId) && !string.IsNullOrWhiteSpace(deviceAddress))
+            {
+                lock (_gate)
+                {
+                    _connectionToDeviceAddress[connectionId] = deviceAddress;
+                    string peerId;
+                    if (_connectionToPeer.TryGetValue(connectionId, out peerId))
+                        _peerToLastDeviceAddress[peerId] = deviceAddress;
+                }
+            }
             SendHelloAsync(connectionId);
         }
 
@@ -163,6 +184,7 @@ namespace SolarNet.BluetoothClassic
             string peerId = null;
             lock (_gate)
             {
+                _connectionToDeviceAddress.Remove(connectionId);
                 if (_connectionToPeer.TryGetValue(connectionId, out peerId))
                 {
                     _connectionToPeer.Remove(connectionId);
@@ -249,6 +271,9 @@ namespace SolarNet.BluetoothClassic
                 }
                 _connectionToPeer[connectionId] = peerId;
                 _peerToConnection[peerId] = connectionId;
+                string deviceAddress;
+                if (_connectionToDeviceAddress.TryGetValue(connectionId, out deviceAddress) && !string.IsNullOrWhiteSpace(deviceAddress))
+                    _peerToLastDeviceAddress[peerId] = deviceAddress;
                 newlyBound = true;
                 return true;
             }

@@ -17,7 +17,7 @@ using UnityEngine.Android;
 
 namespace SolarNet.Samples.GridDuel
 {
-    public sealed class GridDuelNetworkedDemo : MonoBehaviour
+    public sealed partial class GridDuelNetworkedDemo : MonoBehaviour
     {
         private const string RoomId = "grid-duel-room";
         private const string RoomName = "Grid Duel";
@@ -308,6 +308,7 @@ namespace SolarNet.Samples.GridDuel
         {
             var adapter = new AndroidNearbyAdapter();
             _nativeAdapter = adapter;
+            _nearbyAdapter = adapter;
             var endpointName = _isHost
                 ? NearbyRoomAdvertisementCodec.Encode(RoomId, RoomName, CompatibilityKey)
                 : displayName;
@@ -320,12 +321,7 @@ namespace SolarNet.Samples.GridDuel
                     _isHost ? NearbyConnectionRole.Advertiser : NearbyConnectionRole.Discoverer,
                     NearbyConnectionStrategy.Star,
                     false));
-            _nearbyTransport.EndpointDiscovered += OnNearbyEndpointFound;
-            _nearbyTransport.EndpointLost += OnNearbyEndpointLost;
-            _nearbyTransport.ConnectionVerificationRequired += OnNearbyVerificationRequired;
-            _nearbyTransport.PeerConnected += OnPeerConnected;
-            _nearbyTransport.PeerDisconnected += OnPeerDisconnected;
-            _nearbyTransport.Faulted += OnTransportFault;
+            SubscribeNearbyTransport(_nearbyTransport);
             _transport = _nearbyTransport;
         }
 
@@ -333,13 +329,12 @@ namespace SolarNet.Samples.GridDuel
         {
             var adapter = new AndroidBluetoothClassicAdapter();
             _nativeAdapter = adapter;
+            _bluetoothAdapter = adapter;
             _bluetoothTransport = new BluetoothClassicTransport(
                 _localPeerId,
                 adapter,
                 new BluetoothClassicTransportOptions(_isHost ? BluetoothClassicRole.Server : BluetoothClassicRole.Client));
-            _bluetoothTransport.PeerConnected += OnPeerConnected;
-            _bluetoothTransport.PeerDisconnected += OnPeerDisconnected;
-            _bluetoothTransport.Faulted += OnTransportFault;
+            SubscribeBluetoothTransport(_bluetoothTransport);
             _transport = _bluetoothTransport;
         }
 
@@ -467,45 +462,23 @@ namespace SolarNet.Samples.GridDuel
 
         private async void OnPeerConnected(string peerId)
         {
-            _status = "Connected: " + peerId;
-            AddLog(_status);
-            try
-            {
-                if (_room != null) await _room.NotifyPeerConnectedAsync(peerId);
-                if (!_isHost && _game != null && string.Equals(peerId, HostPeerId, StringComparison.Ordinal))
-                {
-                    await _game.RequestResyncAsync();
-                    AddLog("Requested game-state resync after live-link reconnect.");
-                }
-            }
-            catch (Exception ex)
-            {
-                AddLog("Reconnect/join error: " + ex.Message);
-            }
+            await HandlePeerConnectedAsync(peerId);
         }
 
         private async void OnPeerDisconnected(string peerId)
         {
-            _status = "Opponent disconnected.";
-            AddLog(_status);
-            try
-            {
-                if (_room != null) await _room.NotifyPeerDisconnectedAsync(peerId);
-            }
-            catch (Exception ex)
-            {
-                AddLog("Room disconnect error: " + ex.Message);
-            }
+            if (await TryHandleMigrationDisconnectAsync(peerId)) return;
+            await HandleOrdinaryPeerDisconnectedAsync(peerId);
         }
 
         private void OnNearbyEndpointFound(NearbyEndpoint endpoint)
         {
-            _nearbyEndpoints[endpoint.EndpointId] = new NearbyEndpointView { Id = endpoint.EndpointId, Name = endpoint.EndpointName };
+            HandleNearbyEndpointFoundForMigration(endpoint);
         }
 
         private void OnNearbyEndpointLost(string endpointId)
         {
-            _nearbyEndpoints.Remove(endpointId);
+            HandleNearbyEndpointLostForMigration(endpointId);
         }
 
         private void OnNearbyVerificationRequired(NearbyVerificationRequest request)
@@ -617,12 +590,7 @@ namespace SolarNet.Samples.GridDuel
                     _transport,
                     _isHost ? info.CreateHostTurnCoordinator() : null,
                     _gameState);
-                _game.ActionCommitted += OnActionCommitted;
-                _game.ActionRejected += rejection => AddLog("Turn rejected: " + rejection.Reason);
-                _game.StateMismatchDetected += mismatch => AddLog("State mismatch: " + mismatch.Reason + ". Automatic resync is active.");
-                _game.SnapshotApplied += snapshot => AddLog("State snapshot applied at turn " + snapshot.NextTurnIndex + ".");
-                _game.ResyncFailed += failure => AddLog("Resync failed: " + failure.Reason);
-                _game.ProtocolFaulted += ex => AddLog("Game fault: " + ex.Message);
+                SubscribeGame(_game);
                 await _game.StartAsync();
 
                 if (!_isHost && _resumeFromProcessRestart)
@@ -722,6 +690,7 @@ namespace SolarNet.Samples.GridDuel
             _localPeerId = string.Empty;
             _sawLobbyBeforePlaying = false;
             _resumeFromProcessRestart = false;
+            ClearMigrationRuntimeState();
         }
 
         private async void OnDestroy()
