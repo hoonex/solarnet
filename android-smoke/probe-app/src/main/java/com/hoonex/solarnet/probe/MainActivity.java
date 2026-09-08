@@ -2,13 +2,13 @@ package com.hoonex.solarnet.probe;
 
 import android.Manifest;
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -35,7 +35,9 @@ public final class MainActivity extends Activity {
     private SolarBluetoothClassicBridge bridge;
     private TextView statusView;
     private TextView logView;
+    private TextView soakView;
     private LinearLayout deviceList;
+    private ProbeSoakController soakController;
     private boolean hostMode;
 
     @Override
@@ -43,6 +45,26 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(buildUi());
         bridge = new SolarBluetoothClassicBridge(this, new ProbeCallback());
+        soakController = new ProbeSoakController(bridge, this::nextId, new ProbeSoakController.Listener() {
+            @Override
+            public void onProgress(ProbeSoakStats.Snapshot snapshot) {
+                runOnUiThread(() -> {
+                    if (soakView != null) soakView.setText("Soak: " + snapshot.toSummary());
+                });
+            }
+
+            @Override
+            public void onFinished(ProbeSoakStats.Snapshot snapshot, String reason) {
+                String result = buildSoakResultJson(snapshot, reason);
+                Log.i("SolarNetProbe", "SOLARNET_PROBE_RESULT " + result);
+                log("SOAK FINISH " + snapshot.toSummary() + " reason=" + reason);
+            }
+
+            @Override
+            public void onLog(String message) {
+                log(message);
+            }
+        });
         log("Probe ready. Pair the two phones in Android settings before the RFCOMM test.");
     }
 
@@ -81,6 +103,16 @@ public final class MainActivity extends Activity {
         root.addView(deviceList);
 
         root.addView(button("Broadcast PING", v -> broadcastPing()));
+        root.addView(button("CLIENT: start 10-minute soak", v -> startSoak()));
+        root.addView(button("Stop soak", v -> stopSoak()));
+
+        soakView = new TextView(this);
+        soakView.setText("Soak: idle");
+        soakView.setTextSize(14f);
+        soakView.setTextIsSelectable(true);
+        soakView.setPadding(0, dp(8), 0, 0);
+        root.addView(soakView);
+
         root.addView(button("Stop all connections", v -> stopAll()));
 
         TextView logTitle = new TextView(this);
@@ -189,7 +221,36 @@ public final class MainActivity extends Activity {
         log("TX broadcast: " + payload + " (connections=" + connections.size() + ")");
     }
 
+    private void startSoak() {
+        if (hostMode) {
+            log("Start the timed soak on the CLIENT phone; the HOST only echoes probe PING packets.");
+            return;
+        }
+        synchronized (connections) {
+            if (connections.isEmpty()) {
+                log("Connect to the host before starting the soak.");
+                return;
+            }
+        }
+        try {
+            String runId = soakController.start();
+            setStatus("soak running " + runId);
+        } catch (Throwable t) {
+            log("ERROR start soak: " + message(t));
+        }
+    }
+
+    private void stopSoak() {
+        if (soakController == null || !soakController.isRunning()) {
+            log("No soak run is active.");
+            return;
+        }
+        soakController.stop("manual-stop");
+        setStatus("soak stopped");
+    }
+
     private void stopAll() {
+        if (soakController != null && soakController.isRunning()) soakController.stop("stop-all");
         bridge.stopAll(nextId());
         synchronized (connections) { connections.clear(); }
         setStatus("stopped");
@@ -213,6 +274,21 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private String buildSoakResultJson(ProbeSoakStats.Snapshot snapshot, String reason) {
+        String device = Build.MANUFACTURER + " " + Build.MODEL;
+        return "{" +
+                "\"transport\":\"bluetooth-classic\"," +
+                "\"probeVersion\":\"0.2.0\"," +
+                "\"deviceModel\":\"" + jsonEscape(device) + "\"," +
+                "\"sdkInt\":" + Build.VERSION.SDK_INT + "," +
+                "\"result\":" + snapshot.toJson(reason) +
+                "}";
+    }
+
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     private static String message(Throwable t) {
         String text = t.getMessage();
         return text == null || text.length() == 0 ? t.getClass().getSimpleName() : text;
@@ -224,6 +300,9 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (soakController != null) {
+            try { soakController.close(); } catch (Throwable ignored) { }
+        }
         if (bridge != null) {
             try { bridge.stopAll(nextId()); } catch (Throwable ignored) { }
         }
@@ -233,6 +312,7 @@ public final class MainActivity extends Activity {
     private final class ProbeCallback implements SolarBluetoothClassicBridge.Callback {
         @Override
         public void onOperationResult(long requestId, boolean success, String error) {
+            if (soakController != null && soakController.onOperationResult(requestId, success, error)) return;
             log("op#" + requestId + " " + (success ? "OK" : "FAILED: " + error));
         }
 
@@ -247,6 +327,7 @@ public final class MainActivity extends Activity {
 
         @Override
         public void onDisconnected(String connectionId) {
+            if (soakController != null) soakController.onDisconnected();
             synchronized (connections) { connections.remove(connectionId); }
             setStatus("disconnected " + connectionId);
             log("DISCONNECTED id=" + connectionId);
@@ -254,6 +335,7 @@ public final class MainActivity extends Activity {
 
         @Override
         public void onBytesReceived(String connectionId, byte[] payload) {
+            if (soakController != null && soakController.handleBytes(connectionId, payload, hostMode)) return;
             String text = new String(payload, StandardCharsets.UTF_8);
             log("RX " + connectionId + ": " + text);
             if (hostMode && text.startsWith("PING ")) {
@@ -265,6 +347,7 @@ public final class MainActivity extends Activity {
 
         @Override
         public void onError(String operation, String message) {
+            if (soakController != null) soakController.onBridgeError(operation, message);
             setStatus("error: " + operation);
             log("ERROR " + operation + ": " + message);
         }
