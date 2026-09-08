@@ -60,7 +60,7 @@ internal static class Program
         {
             if (snapshot.Players.Length == 2 && snapshot.Phase == SolarRoomPhase.Lobby) clientJoined.TrySetResult(snapshot);
         };
-        clientRoom.GameStarted += clientStarted.TrySetResult;
+        clientRoom.GameStarted += start => { clientStarted.TrySetResult(start); };
         hostRoom.ProtocolFaulted += faults.Add;
         clientRoom.ProtocolFaulted += faults.Add;
         hostRoom.Attach();
@@ -123,7 +123,7 @@ internal static class Program
         var hostRoom = new SolarRoomSession(new SolarRoomOptions("room-b", "host", "Host", "build-A"), hostTransport);
         var clientRoom = new SolarRoomSession(new SolarRoomOptions("room-b", "host", "Client", "build-B"), clientTransport);
         var rejected = Signal<SolarRoomJoinRejection>();
-        clientRoom.JoinRejected += rejected.TrySetResult;
+        clientRoom.JoinRejected += rejection => { rejected.TrySetResult(rejection); };
         hostRoom.Attach();
         clientRoom.Attach();
 
