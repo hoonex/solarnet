@@ -13,3 +13,4 @@
 - [ ] Bluetooth Classic smoke tests
 - [ ] Android Nearby compile
 - [ ] Android Bluetooth Classic compile
+- [ ] Android Transport Probe APK build

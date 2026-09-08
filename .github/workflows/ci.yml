@@ -49,3 +49,17 @@ jobs:
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
         run: gradle -p android-smoke :solarnet-bluetooth-classic:assembleDebug --no-daemon --stacktrace
+      - name: Build physical transport probe APK
+        run: gradle -p android-smoke :probe-app:assembleDebug --no-daemon --stacktrace
+      - name: Write probe checksum
+        run: |
+          cd android-smoke/probe-app/build/outputs/apk/debug
+          sha256sum probe-app-debug.apk > probe-app-debug.apk.sha256
+      - name: Upload transport probe APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: solarnet-transport-probe-apk
+          path: |
+            android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk
+            android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk.sha256
+          retention-days: 14
