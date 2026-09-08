@@ -24,6 +24,7 @@ namespace SolarNet.Samples.GridDuel
         private const string CompatibilityKey = "grid-duel-v1";
         private const string NearbyServiceId = "com.hoonex.solarnet.gridduel";
         private const string HostPeerId = "host";
+        private const string ClientPeerIdKey = "SolarNet.GridDuel.ClientPeerId";
 
         private enum TransportMode
         {
@@ -41,6 +42,8 @@ namespace SolarNet.Samples.GridDuel
         private bool _isHost = true;
         private bool _started;
         private bool _busy;
+        private bool _sawLobbyBeforePlaying;
+        private bool _resumeFromProcessRestart;
         private string _localPeerId = string.Empty;
         private string _status = "Choose a role and transport.";
         private readonly List<string> _logs = new List<string>();
@@ -90,10 +93,13 @@ namespace SolarNet.Samples.GridDuel
 
             GUILayout.Label("2. Transport");
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button(_transportMode == TransportMode.BluetoothClassic ? "Bluetooth Classic ✓" : "Bluetooth Classic")) _transportMode = TransportMode.BluetoothClassic;
-            if (GUILayout.Button(_transportMode == TransportMode.Nearby ? "Nearby ✓" : "Nearby")) _transportMode = TransportMode.Nearby;
+            if (GUILayout.Button(_transportMode == TransportMode.BluetoothClassic ? "Bluetooth Classic ✓" : "Bluetooth Classic"))
+                _transportMode = TransportMode.BluetoothClassic;
+            if (GUILayout.Button(_transportMode == TransportMode.Nearby ? "Nearby ✓" : "Nearby"))
+                _transportMode = TransportMode.Nearby;
             GUILayout.EndHorizontal();
 
+            if (!_isHost) GUILayout.Label("Client peer identity persists across app restarts for active-match resume.");
             if (GUILayout.Button("Request Android permissions", GUILayout.Height(38f))) RequestAndroidPermissions();
             if (GUILayout.Button(_isHost ? "Start Grid Duel host" : "Start Grid Duel client", GUILayout.Height(46f))) StartNetworkedMatch();
             GUI.enabled = true;
@@ -124,6 +130,7 @@ namespace SolarNet.Samples.GridDuel
                 GUILayout.Label("RFCOMM server listening. Pair both phones in Android Settings first.");
                 return;
             }
+
             if (GUILayout.Button("Refresh paired devices")) RefreshBondedDevices();
             if (_bondedDevices.Count == 0) GUILayout.Label("No paired devices loaded yet.");
             for (var i = 0; i < _bondedDevices.Count; i++)
@@ -169,9 +176,13 @@ namespace SolarNet.Samples.GridDuel
             {
                 foreach (var player in snapshot.Players)
                 {
-                    GUILayout.Label("#" + player.Slot + " " + player.DisplayName + " " + (player.IsReady ? "READY" : "not ready") + " " + (player.IsConnected ? "online" : "offline"));
+                    GUILayout.Label(
+                        "#" + player.Slot + " " + player.DisplayName + " " +
+                        (player.IsReady ? "READY" : "not ready") + " " +
+                        (player.IsConnected ? "online" : "offline"));
                 }
             }
+
             GUI.enabled = !_busy && _room.Phase == SolarRoomPhase.Lobby;
             if (GUILayout.Button("Toggle my Ready")) ToggleReady();
             GUI.enabled = !_busy && _isHost && _room.CanStart;
@@ -205,7 +216,8 @@ namespace SolarNet.Samples.GridDuel
 
         private bool CanActLocally()
         {
-            return !_busy && _game != null && _gameState != null && !_gameState.IsFinished && string.Equals(_game.KnownCurrentPlayerId, _localPeerId, StringComparison.Ordinal);
+            return !_busy && _game != null && _gameState != null && !_gameState.IsFinished &&
+                   string.Equals(_game.KnownCurrentPlayerId, _localPeerId, StringComparison.Ordinal);
         }
 
         private async void HandleCell(int x, int y)
@@ -214,23 +226,42 @@ namespace SolarNet.Samples.GridDuel
             var actor = _gameState.GetPlayer(_localPeerId);
             var target = _gameState.GetPlayerAt(x, y);
             if (actor == null) return;
+
             _busy = true;
             try
             {
                 if (target == null)
                 {
-                    if (Math.Abs(actor.X - x) + Math.Abs(actor.Y - y) != 1) { _status = "Move exactly one orthogonal tile."; return; }
+                    if (Math.Abs(actor.X - x) + Math.Abs(actor.Y - y) != 1)
+                    {
+                        _status = "Move exactly one orthogonal tile.";
+                        return;
+                    }
                     await _game.SubmitActionAsync(GridDuelActionCodec.MoveAction, GridDuelActionCodec.EncodeMove(x, y));
                 }
                 else if (!string.Equals(target.PeerId, _localPeerId, StringComparison.Ordinal))
                 {
-                    if (Math.Abs(actor.X - target.X) + Math.Abs(actor.Y - target.Y) != 1) { _status = "Enemy must be adjacent to attack."; return; }
+                    if (Math.Abs(actor.X - target.X) + Math.Abs(actor.Y - target.Y) != 1)
+                    {
+                        _status = "Enemy must be adjacent to attack.";
+                        return;
+                    }
                     await _game.SubmitActionAsync(GridDuelActionCodec.AttackAction, Array.Empty<byte>());
                 }
-                else _status = "That is your own unit.";
+                else
+                {
+                    _status = "That is your own unit.";
+                }
             }
-            catch (Exception ex) { _status = "Action failed: " + ex.Message; AddLog(_status); }
-            finally { _busy = false; }
+            catch (Exception ex)
+            {
+                _status = "Action failed: " + ex.Message;
+                AddLog(_status);
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async void StartNetworkedMatch()
@@ -239,20 +270,26 @@ namespace SolarNet.Samples.GridDuel
             _busy = true;
             try
             {
-                _localPeerId = _isHost ? HostPeerId : "client-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                _localPeerId = _isHost ? HostPeerId : GetOrCreatePersistentClientPeerId();
+                _sawLobbyBeforePlaying = false;
+                _resumeFromProcessRestart = false;
                 var displayName = _isHost ? "SUN" : "MOON";
                 _nearbyEndpoints.Clear();
                 _verificationRequests.Clear();
                 _bondedDevices.Clear();
-                if (_transportMode == TransportMode.Nearby) CreateNearbyTransport(displayName); else CreateBluetoothTransport();
 
-                _room = new SolarRoomSession(new SolarRoomOptions(RoomId, HostPeerId, displayName, CompatibilityKey, RoomName, 2, SolarHostDisconnectPolicy.WaitForReconnect), _transport);
+                if (_transportMode == TransportMode.Nearby) CreateNearbyTransport(displayName);
+                else CreateBluetoothTransport();
+
+                _room = new SolarRoomSession(
+                    new SolarRoomOptions(RoomId, HostPeerId, displayName, CompatibilityKey, RoomName, 2, SolarHostDisconnectPolicy.WaitForReconnect),
+                    _transport);
                 SubscribeRoom(_room);
                 _room.Attach();
                 await _transport.StartAsync();
                 _started = true;
                 _status = _isHost ? "Host started. Waiting for opponent." : "Client started. Connect to the host.";
-                AddLog(_status);
+                AddLog(_status + " peer=" + _localPeerId);
                 if (_transportMode == TransportMode.BluetoothClassic && !_isHost) RefreshBondedDevices();
             }
             catch (Exception ex)
@@ -261,15 +298,28 @@ namespace SolarNet.Samples.GridDuel
                 AddLog(_status);
                 await CleanupFailedStart();
             }
-            finally { _busy = false; }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private void CreateNearbyTransport(string displayName)
         {
             var adapter = new AndroidNearbyAdapter();
             _nativeAdapter = adapter;
-            var endpointName = _isHost ? NearbyRoomAdvertisementCodec.Encode(RoomId, RoomName, CompatibilityKey) : displayName;
-            _nearbyTransport = new NearbyTransport(_localPeerId, adapter, new NearbyTransportOptions(NearbyServiceId, endpointName, _isHost ? NearbyConnectionRole.Advertiser : NearbyConnectionRole.Discoverer, NearbyConnectionStrategy.Star, false));
+            var endpointName = _isHost
+                ? NearbyRoomAdvertisementCodec.Encode(RoomId, RoomName, CompatibilityKey)
+                : displayName;
+            _nearbyTransport = new NearbyTransport(
+                _localPeerId,
+                adapter,
+                new NearbyTransportOptions(
+                    NearbyServiceId,
+                    endpointName,
+                    _isHost ? NearbyConnectionRole.Advertiser : NearbyConnectionRole.Discoverer,
+                    NearbyConnectionStrategy.Star,
+                    false));
             _nearbyTransport.EndpointDiscovered += OnNearbyEndpointFound;
             _nearbyTransport.EndpointLost += OnNearbyEndpointLost;
             _nearbyTransport.ConnectionVerificationRequired += OnNearbyVerificationRequired;
@@ -283,7 +333,10 @@ namespace SolarNet.Samples.GridDuel
         {
             var adapter = new AndroidBluetoothClassicAdapter();
             _nativeAdapter = adapter;
-            _bluetoothTransport = new BluetoothClassicTransport(_localPeerId, adapter, new BluetoothClassicTransportOptions(_isHost ? BluetoothClassicRole.Server : BluetoothClassicRole.Client));
+            _bluetoothTransport = new BluetoothClassicTransport(
+                _localPeerId,
+                adapter,
+                new BluetoothClassicTransportOptions(_isHost ? BluetoothClassicRole.Server : BluetoothClassicRole.Client));
             _bluetoothTransport.PeerConnected += OnPeerConnected;
             _bluetoothTransport.PeerDisconnected += OnPeerDisconnected;
             _bluetoothTransport.Faulted += OnTransportFault;
@@ -296,7 +349,9 @@ namespace SolarNet.Samples.GridDuel
             try
             {
                 var sdk = GetAndroidSdkInt();
-                var required = _transportMode == TransportMode.Nearby ? NearbyAndroidPermissions.GetRequiredRuntimePermissions(sdk, GetAndroidTargetSdkInt()) : BluetoothClassicAndroidPermissions.GetRequiredRuntimePermissions(sdk);
+                var required = _transportMode == TransportMode.Nearby
+                    ? NearbyAndroidPermissions.GetRequiredRuntimePermissions(sdk, GetAndroidTargetSdkInt())
+                    : BluetoothClassicAndroidPermissions.GetRequiredRuntimePermissions(sdk);
                 var requested = 0;
                 foreach (var permission in required)
                 {
@@ -304,9 +359,14 @@ namespace SolarNet.Samples.GridDuel
                     Permission.RequestUserPermission(permission);
                     requested++;
                 }
-                AddLog(requested == 0 ? "Android permissions already granted." : "Requested " + requested + " permission(s). Approve them, then start again.");
+                AddLog(requested == 0
+                    ? "Android permissions already granted."
+                    : "Requested " + requested + " permission(s). Approve them, then start again.");
             }
-            catch (Exception ex) { AddLog("Permission error: " + ex.Message); }
+            catch (Exception ex)
+            {
+                AddLog("Permission error: " + ex.Message);
+            }
 #else
             AddLog("Permission request is available only in an Android Player build.");
 #endif
@@ -330,39 +390,79 @@ namespace SolarNet.Samples.GridDuel
         {
             if (_busy || _nearbyTransport == null) return;
             _busy = true;
-            try { await _nearbyTransport.RequestConnectionAsync(endpointId); }
-            catch (Exception ex) { AddLog("Nearby connect error: " + ex.Message); }
-            finally { _busy = false; }
+            try
+            {
+                await _nearbyTransport.RequestConnectionAsync(endpointId);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Nearby connect error: " + ex.Message);
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async void AcceptNearby(string endpointId)
         {
             if (_nearbyTransport == null) return;
-            try { await _nearbyTransport.AcceptConnectionAsync(endpointId); _verificationRequests.Remove(endpointId); }
-            catch (Exception ex) { AddLog("Nearby accept error: " + ex.Message); }
+            try
+            {
+                await _nearbyTransport.AcceptConnectionAsync(endpointId);
+                _verificationRequests.Remove(endpointId);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Nearby accept error: " + ex.Message);
+            }
         }
 
         private async void RejectNearby(string endpointId)
         {
             if (_nearbyTransport == null) return;
-            try { await _nearbyTransport.RejectConnectionAsync(endpointId); _verificationRequests.Remove(endpointId); }
-            catch (Exception ex) { AddLog("Nearby reject error: " + ex.Message); }
+            try
+            {
+                await _nearbyTransport.RejectConnectionAsync(endpointId);
+                _verificationRequests.Remove(endpointId);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Nearby reject error: " + ex.Message);
+            }
         }
 
         private void RefreshBondedDevices()
         {
             if (_bluetoothTransport == null) return;
-            try { _bondedDevices.Clear(); _bondedDevices.AddRange(_bluetoothTransport.GetBondedDevices()); AddLog("Loaded " + _bondedDevices.Count + " paired device(s)."); }
-            catch (Exception ex) { AddLog("Paired device error: " + ex.Message); }
+            try
+            {
+                _bondedDevices.Clear();
+                _bondedDevices.AddRange(_bluetoothTransport.GetBondedDevices());
+                AddLog("Loaded " + _bondedDevices.Count + " paired device(s).");
+            }
+            catch (Exception ex)
+            {
+                AddLog("Paired device error: " + ex.Message);
+            }
         }
 
         private async void ConnectBluetooth(string address)
         {
             if (_busy || _bluetoothTransport == null) return;
             _busy = true;
-            try { await _bluetoothTransport.ConnectAsync(address); }
-            catch (Exception ex) { AddLog("Bluetooth connect error: " + ex.Message); }
-            finally { _busy = false; }
+            try
+            {
+                await _bluetoothTransport.ConnectAsync(address);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Bluetooth connect error: " + ex.Message);
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async void OnPeerConnected(string peerId)
@@ -375,33 +475,77 @@ namespace SolarNet.Samples.GridDuel
                 if (!_isHost && _game != null && string.Equals(peerId, HostPeerId, StringComparison.Ordinal))
                 {
                     await _game.RequestResyncAsync();
-                    AddLog("Requested game-state resync after reconnect.");
+                    AddLog("Requested game-state resync after live-link reconnect.");
                 }
             }
-            catch (Exception ex) { AddLog("Reconnect/join error: " + ex.Message); }
+            catch (Exception ex)
+            {
+                AddLog("Reconnect/join error: " + ex.Message);
+            }
         }
 
         private async void OnPeerDisconnected(string peerId)
         {
             _status = "Opponent disconnected.";
             AddLog(_status);
-            try { if (_room != null) await _room.NotifyPeerDisconnectedAsync(peerId); }
-            catch (Exception ex) { AddLog("Room disconnect error: " + ex.Message); }
+            try
+            {
+                if (_room != null) await _room.NotifyPeerDisconnectedAsync(peerId);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Room disconnect error: " + ex.Message);
+            }
         }
 
-        private void OnNearbyEndpointFound(NearbyEndpoint endpoint) { _nearbyEndpoints[endpoint.EndpointId] = new NearbyEndpointView { Id = endpoint.EndpointId, Name = endpoint.EndpointName }; }
-        private void OnNearbyEndpointLost(string endpointId) { _nearbyEndpoints.Remove(endpointId); }
-        private void OnNearbyVerificationRequired(NearbyVerificationRequest request) { _verificationRequests[request.EndpointId] = request; AddLog("Nearby verification code: " + request.AuthenticationDigits); }
-        private void OnTransportFault(Exception exception) { _status = "Transport fault: " + exception.Message; AddLog(_status); }
+        private void OnNearbyEndpointFound(NearbyEndpoint endpoint)
+        {
+            _nearbyEndpoints[endpoint.EndpointId] = new NearbyEndpointView { Id = endpoint.EndpointId, Name = endpoint.EndpointName };
+        }
+
+        private void OnNearbyEndpointLost(string endpointId)
+        {
+            _nearbyEndpoints.Remove(endpointId);
+        }
+
+        private void OnNearbyVerificationRequired(NearbyVerificationRequest request)
+        {
+            _verificationRequests[request.EndpointId] = request;
+            AddLog("Nearby verification code: " + request.AuthenticationDigits);
+        }
+
+        private void OnTransportFault(Exception exception)
+        {
+            _status = "Transport fault: " + exception.Message;
+            AddLog(_status);
+        }
 
         private void SubscribeRoom(SolarRoomSession room)
         {
-            room.RoomChanged += snapshot => _status = "Lobby " + snapshot.Players.Length + "/2 — " + snapshot.Phase;
+            room.RoomChanged += OnRoomChanged;
             room.PhaseChanged += phase => AddLog("Room phase -> " + phase);
             room.JoinRejected += rejection => AddLog("Join rejected: " + rejection.Reason);
             room.RoomClosed += closed => AddLog("Room closed: " + closed.Reason);
             room.GameStarted += OnGameStarted;
             room.ProtocolFaulted += ex => AddLog("Room fault: " + ex.Message);
+        }
+
+        private void OnRoomChanged(SolarRoomSnapshot snapshot)
+        {
+            _status = "Lobby " + snapshot.Players.Length + "/2 — " + snapshot.Phase;
+            if (_isHost) return;
+
+            if (snapshot.Phase == SolarRoomPhase.Lobby)
+            {
+                _sawLobbyBeforePlaying = true;
+                return;
+            }
+
+            if (snapshot.Phase == SolarRoomPhase.Playing && _game == null && !_sawLobbyBeforePlaying)
+            {
+                _resumeFromProcessRestart = true;
+                AddLog("Detected direct rejoin into an active match. A full authoritative resync will run after game-session attach.");
+            }
         }
 
         private async void ToggleReady()
@@ -413,33 +557,66 @@ namespace SolarNet.Samples.GridDuel
                 var ready = false;
                 var snapshot = _room.CurrentSnapshot;
                 if (snapshot != null)
+                {
                     foreach (var player in snapshot.Players)
-                        if (string.Equals(player.PeerId, _localPeerId, StringComparison.Ordinal)) { ready = player.IsReady; break; }
+                    {
+                        if (string.Equals(player.PeerId, _localPeerId, StringComparison.Ordinal))
+                        {
+                            ready = player.IsReady;
+                            break;
+                        }
+                    }
+                }
                 await _room.SetReadyAsync(!ready);
             }
-            catch (Exception ex) { AddLog("Ready error: " + ex.Message); }
-            finally { _busy = false; }
+            catch (Exception ex)
+            {
+                AddLog("Ready error: " + ex.Message);
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async void StartGame()
         {
             if (_busy || !_isHost || _room == null) return;
             _busy = true;
-            try { await _room.StartGameAsync(); }
-            catch (Exception ex) { AddLog("Start match error: " + ex.Message); }
-            finally { _busy = false; }
+            try
+            {
+                await _room.StartGameAsync();
+            }
+            catch (Exception ex)
+            {
+                AddLog("Start match error: " + ex.Message);
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async void OnGameStarted(SolarGameStartInfo info)
         {
             if (_game != null) return;
-            if (info.PlayerIds == null || info.PlayerIds.Length != 2) { AddLog("Grid Duel requires exactly two players."); return; }
+            if (info.PlayerIds == null || info.PlayerIds.Length != 2)
+            {
+                AddLog("Grid Duel requires exactly two players.");
+                return;
+            }
+
             try
             {
                 _playerAId = info.PlayerIds[0];
                 _playerBId = info.PlayerIds[1];
                 _gameState = new GridDuelStateMachine(_playerAId, _playerBId);
-                _game = new SolarTurnSession(info.GameSessionId, info.HostPeerId, _transport, _isHost ? info.CreateHostTurnCoordinator() : null, _gameState);
+                _game = new SolarTurnSession(
+                    info.GameSessionId,
+                    info.HostPeerId,
+                    _transport,
+                    _isHost ? info.CreateHostTurnCoordinator() : null,
+                    _gameState);
                 _game.ActionCommitted += OnActionCommitted;
                 _game.ActionRejected += rejection => AddLog("Turn rejected: " + rejection.Reason);
                 _game.StateMismatchDetected += mismatch => AddLog("State mismatch: " + mismatch.Reason + ". Automatic resync is active.");
@@ -447,8 +624,19 @@ namespace SolarNet.Samples.GridDuel
                 _game.ResyncFailed += failure => AddLog("Resync failed: " + failure.Reason);
                 _game.ProtocolFaulted += ex => AddLog("Game fault: " + ex.Message);
                 await _game.StartAsync();
-                _status = "Match started. SUN moves first.";
-                AddLog("Game session started: " + info.GameSessionId);
+
+                if (!_isHost && _resumeFromProcessRestart)
+                {
+                    _status = "Rejoined active match. Restoring authoritative state...";
+                    AddLog("Game session restored: " + info.GameSessionId + ". Requesting resync from turn 0.");
+                    _resumeFromProcessRestart = false;
+                    await _game.RequestResyncAsync(0);
+                }
+                else
+                {
+                    _status = "Match started. SUN moves first.";
+                    AddLog("Game session started: " + info.GameSessionId);
+                }
             }
             catch (Exception ex)
             {
@@ -463,20 +651,33 @@ namespace SolarNet.Samples.GridDuel
         {
             _status = PlayerLabel(commit.ActorId) + " committed " + commit.ActionKind + ".";
             AddLog("Turn " + commit.CommittedTurnIndex + " committed by " + commit.ActorId + ".");
-            if (_gameState != null && _gameState.IsFinished) _status = "Winner: " + PlayerLabel(_gameState.WinnerPeerId);
+            if (_gameState != null && _gameState.IsFinished)
+                _status = "Winner: " + PlayerLabel(_gameState.WinnerPeerId);
         }
 
         private async void StopNetworkedMatch()
         {
             if (_busy) return;
             _busy = true;
-            try { await ShutdownAsync(); _status = "Stopped."; }
-            finally { _busy = false; }
+            try
+            {
+                await ShutdownAsync();
+                _status = "Stopped.";
+            }
+            finally
+            {
+                _busy = false;
+            }
         }
 
         private async Task CleanupFailedStart()
         {
-            try { if (_room != null) _room.Detach(); if (_transport != null) await _transport.StopAsync(); } catch { }
+            try
+            {
+                if (_room != null) _room.Detach();
+                if (_transport != null) await _transport.StopAsync();
+            }
+            catch { }
             DisposeNativeAdapter();
             ClearRuntimeState();
         }
@@ -484,8 +685,15 @@ namespace SolarNet.Samples.GridDuel
         private async Task ShutdownAsync()
         {
             if (_room != null) _room.Detach();
-            try { if (_game != null) await _game.StopAsync(); else if (_transport != null) await _transport.StopAsync(); }
-            catch (Exception ex) { AddLog("Shutdown error: " + ex.Message); }
+            try
+            {
+                if (_game != null) await _game.StopAsync();
+                else if (_transport != null) await _transport.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                AddLog("Shutdown error: " + ex.Message);
+            }
             DisposeNativeAdapter();
             ClearRuntimeState();
         }
@@ -512,9 +720,25 @@ namespace SolarNet.Samples.GridDuel
             _playerAId = string.Empty;
             _playerBId = string.Empty;
             _localPeerId = string.Empty;
+            _sawLobbyBeforePlaying = false;
+            _resumeFromProcessRestart = false;
         }
 
-        private async void OnDestroy() { if (_transport != null) await ShutdownAsync(); }
+        private async void OnDestroy()
+        {
+            if (_transport != null) await ShutdownAsync();
+        }
+
+        private static string GetOrCreatePersistentClientPeerId()
+        {
+            var existing = PlayerPrefs.GetString(ClientPeerIdKey, string.Empty);
+            if (!string.IsNullOrWhiteSpace(existing)) return existing;
+
+            var created = "client-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+            PlayerPrefs.SetString(ClientPeerIdKey, created);
+            PlayerPrefs.Save();
+            return created;
+        }
 
         private string PlayerLabel(string peerId)
         {
@@ -526,7 +750,9 @@ namespace SolarNet.Samples.GridDuel
         private static string FriendlyEndpointName(string endpointName)
         {
             SolarNearbyRoomAdvertisement advertisement;
-            return NearbyRoomAdvertisementCodec.TryDecode(endpointName, out advertisement) ? advertisement.RoomName + " [" + advertisement.RoomId + "]" : endpointName;
+            return NearbyRoomAdvertisementCodec.TryDecode(endpointName, out advertisement)
+                ? advertisement.RoomName + " [" + advertisement.RoomId + "]"
+                : endpointName;
         }
 
         private void AddLog(string message)
