@@ -24,6 +24,8 @@ jobs:
         run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
       - name: Run state-integrity smoke tests
         run: dotnet run --project tests/SolarNet.StateIntegrity.SmokeTests/SolarNet.StateIntegrity.SmokeTests.csproj --configuration Release --nologo
+      - name: Run room-lifecycle smoke tests
+        run: dotnet run --project tests/SolarNet.Room.SmokeTests/SolarNet.Room.SmokeTests.csproj --configuration Release --nologo
 
   android-nearby:
     runs-on: ubuntu-latest
