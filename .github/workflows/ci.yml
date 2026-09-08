@@ -26,8 +26,10 @@ jobs:
         run: dotnet run --project tests/SolarNet.StateIntegrity.SmokeTests/SolarNet.StateIntegrity.SmokeTests.csproj --configuration Release --nologo
       - name: Run room-lifecycle smoke tests
         run: dotnet run --project tests/SolarNet.Room.SmokeTests/SolarNet.Room.SmokeTests.csproj --configuration Release --nologo
+      - name: Run Bluetooth Classic smoke tests
+        run: dotnet run --project tests/SolarNet.BluetoothClassic.SmokeTests/SolarNet.BluetoothClassic.SmokeTests.csproj --configuration Release --nologo
 
-  android-nearby:
+  android-transports:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,3 +45,5 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
+      - name: Compile Bluetooth Classic Android library
+        run: gradle -p android-smoke :solarnet-bluetooth-classic:assembleDebug --no-daemon --stacktrace
