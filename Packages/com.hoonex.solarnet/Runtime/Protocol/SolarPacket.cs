@@ -11,7 +11,14 @@ namespace SolarNet.Protocol
         StateDigest = 5,
         Snapshot = 6,
         ResyncRequest = 7,
-        ResyncUnavailable = 8
+        ResyncUnavailable = 8,
+
+        RoomJoinRequest = 20,
+        RoomJoinRejected = 21,
+        RoomState = 22,
+        RoomReady = 23,
+        RoomLeave = 24,
+        RoomClose = 25
     }
 
     public sealed class SolarPacket
