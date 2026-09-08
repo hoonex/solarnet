@@ -12,6 +12,7 @@ namespace SolarNet.Protocol
         Snapshot = 6,
         ResyncRequest = 7,
         ResyncUnavailable = 8,
+        ReplicationAck = 9,
 
         RoomJoinRequest = 20,
         RoomJoinRejected = 21,
