@@ -17,14 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 3
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Verify exact mission base
+      - name: Verify exact mission ancestry
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "dfb6b3d2b6973126c2b6ccc906b8f7f37642fa4c"
+          test "$(git rev-parse HEAD^)" = "82c1221a57e3eb415b3b0b98a11b0bf607b98832"
+          test "$(git rev-parse HEAD^^)" = "dfb6b3d2b6973126c2b6ccc906b8f7f37642fa4c"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/m17-unity-context-fix.yml"
       - name: Keep Unity continuations on main context
         run: |
@@ -46,10 +47,9 @@ jobs:
           set -euo pipefail
           rm .github/workflows/m17-unity-context-fix.yml
           git add -A
-          changed=$(git diff --cached --name-only)
-          test "$changed" = 'Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs
-.github/workflows/m17-unity-context-fix.yml' || test "$changed" = '.github/workflows/m17-unity-context-fix.yml
-Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs'
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git diff --cached --name-only | grep -Fx '.github/workflows/m17-unity-context-fix.yml'
+          git diff --cached --name-only | grep -Fx 'Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Keep Grid Duel migration on Unity context'
