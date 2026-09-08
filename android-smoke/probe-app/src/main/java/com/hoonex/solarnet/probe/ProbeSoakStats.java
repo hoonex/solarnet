@@ -156,6 +156,10 @@ public final class ProbeSoakStats {
         return runId;
     }
 
+    public synchronized long startedNanos() {
+        return startedNanos;
+    }
+
     public synchronized void recordSent(long sequence, long sentNanos) {
         if (sequence < 0) throw new IllegalArgumentException("sequence cannot be negative");
         if (sentNanos < startedNanos) throw new IllegalArgumentException("sent timestamp precedes soak start");
@@ -198,6 +202,10 @@ public final class ProbeSoakStats {
         maxRttNanos = Math.max(maxRttNanos, rtt);
         totalRttNanos += rtt;
         return PongResult.ACCEPTED;
+    }
+
+    public synchronized void recordInvalid() {
+        invalid++;
     }
 
     public synchronized void recordDisconnect() {
