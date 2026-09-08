@@ -111,7 +111,7 @@ internal static class Program
             AssertConverged(hostState, clientState, "at match end");
             Equal("moon", hostState.WinnerPeerId, "winner");
             Equal(0, hostState.GetPlayer("sun").Health, "defeated health");
-            Equal(2L, host.KnownNextTurnIndex - client.KnownNextTurnIndex, "placeholder");
+            Equal(0L, host.KnownNextTurnIndex - client.KnownNextTurnIndex, "turn indices converge");
             Equal(0, faults.Count, "protocol faults");
         }
         finally
