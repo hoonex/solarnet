@@ -24,7 +24,7 @@ namespace SolarNet.Session
         public SolarTurnRejectReason Reason { get; private set; }
     }
 
-    public sealed class SolarTurnSession
+    public sealed partial class SolarTurnSession
     {
         private readonly ISolarTransport _transport;
         private readonly TurnCoordinator _hostCoordinator;
@@ -69,6 +69,8 @@ namespace SolarNet.Session
                 throw new ArgumentException("The host session requires a TurnCoordinator.", nameof(hostCoordinator));
             if (!IsHost && _hostCoordinator != null)
                 throw new ArgumentException("Only the host session may own the TurnCoordinator.", nameof(hostCoordinator));
+
+            InitializeReplicationAcknowledgements(journalCapacity);
 
             if (IsHost)
             {
@@ -211,6 +213,10 @@ namespace SolarNet.Session
                     else if (packet.Type == SolarPacketType.ResyncRequest)
                     {
                         await HandleResyncRequestAsHostAsync(packet, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    else if (packet.Type == SolarPacketType.ReplicationAck)
+                    {
+                        HandleReplicationAcknowledgementAsHost(packet);
                     }
                     return;
                 }
