@@ -20,6 +20,8 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Build SolarNet core
         run: dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
+      - name: Compile Unity Android C# bridge surface
+        run: dotnet build tests/SolarNet.UnityAndroidCompile/SolarNet.UnityAndroidCompile.csproj --configuration Release --nologo
       - name: Run multiplayer smoke tests
         run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
       - name: Run state-integrity smoke tests
