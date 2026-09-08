@@ -22,7 +22,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Verify exact mission parent
-        run: test "$(git rev-parse HEAD^)" = "f628cc77c00b936ca58b30514f7fbef87492a949"
+        run: test "$(git rev-parse HEAD^)" = "47a2f66e40d517116c1cd9439751b716a71eb460"
       - name: Patch resumed-authority revalidation fence
         shell: python
         run: |
@@ -69,7 +69,7 @@ jobs:
           test = Path('tests/SolarNet.AuthorityEpochResume.SmokeTests/Program.cs')
           text = test.read_text()
           old = '''            resumed.RoomSession.Attach();\n            resumed.GameSession.ProtocolFaulted += faults.Add;\n            await resumed.GameSession.StartAsync().ConfigureAwait(false);'''
-          new = '''            resumed.RoomSession.Attach();\n            resumed.GameSession.ProtocolFaulted += faults.Add;\n            var preProofRejection = Signal<SolarTurnRejection>();\n            replica.ActionRejected += rejection => preProofRejection.TrySetResult(rejection);\n            await resumed.GameSession.StartAsync().ConfigureAwait(false);'''
+          new = '''            resumed.RoomSession.Attach();\n            resumed.GameSession.ProtocolFaulted += faults.Add;\n            var preProofRejection = new TaskCompletionSource<SolarTurnRejection>(TaskCreationOptions.RunContinuationsAsynchronously);\n            replica.ActionRejected += rejection => preProofRejection.TrySetResult(rejection);\n            await resumed.GameSession.StartAsync().ConfigureAwait(false);'''
           if text.count(old) != 1:
               raise SystemExit('test rejection signal match failed')
           text = text.replace(old, new, 1)
