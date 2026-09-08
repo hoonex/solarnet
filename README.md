@@ -2,46 +2,45 @@
 
 SolarNet is a local-first multiplayer engine for turn-based games.
 
-The first target is a 2D mobile game where nearby devices can play together without a traditional game server. The engine separates physical transport, room/lobby lifecycle, authoritative turns, and deterministic game-state recovery.
+The first target is a 2D mobile game where nearby devices can play together without a traditional game server. The engine separates physical transport, room/lobby lifecycle, authoritative turns, deterministic game-state recovery, and host-migration evidence.
 
-## Current milestone — 0.14
+## Current milestone — 0.15
 
 - host-authoritative turn ordering and duplicate/out-of-order protection;
 - Google Nearby advertiser/discoverer transport for Unity Android;
 - explicit Bluetooth-only Android transport using secure Bluetooth Classic RFCOMM;
 - deterministic `ISolarGameStateMachine`, SHA-256 state digests, journal replay, snapshot fallback, reconnect, and client process resume;
 - deterministic authority checkpoints and promoted-host bootstrap into a fenced session epoch;
-- room/checkpoint consistency validation for migration;
 - safety-first deterministic successor selection using stable room slot order;
-- deterministic SHA-256-derived authority epoch IDs independent of transient link observations;
-- migrated-room authority bootstrap that preserves original player slots while moving `HostPeerId` to the elected successor;
-- Nearby topology rebuild from discoverer to advertiser on the successor and migrated-room rediscovery on survivors;
-- Bluetooth Classic client/server role rebuilding with authenticated last-link device-address recovery;
-- Grid Duel synchronized link-loss migration: checkpoint safety gate, authority epoch rotation, topology rebuild, room rejoin, and authoritative resync;
+- migrated-room authority bootstrap plus Nearby/Bluetooth role switching;
+- Grid Duel synchronized link-loss migration with authority epoch rotation, room rejoin, and authoritative resync;
+- state-verified `ReplicationAck` packets after successful committed-action or snapshot application;
+- host-side per-peer replication frontiers through `GetReplicationFrontier` / `IsReplicatedThrough`;
+- bounded authoritative digest evidence, duplicate-ACK idempotency, and forged-digest rejection;
 - Unity Diagnostics and playable Grid Duel samples;
-- deterministic 240-turn chaos soak plus recovery, resume, authority-promotion, migration-planning, migration-orchestration, and Grid Duel migration CI gates;
+- deterministic 240-turn chaos soak plus recovery, resume, authority-promotion, migration, Grid Duel migration, and replication-ACK CI gates;
 - Nearby/Bluetooth Android libraries and transport Probe APK built in CI.
 
-## Host migration status
+## Replication and host migration
 
-The deterministic, topology-rebuild, and sample integration pieces are separated cleanly:
+The migration path is intentionally evidence-driven:
 
-1. synchronized peer captures `SolarAuthorityCheckpoint`;
-2. every survivor calls `SolarHostMigrationPlanner.Create(roomSnapshot, checkpoint)`;
-3. the lowest non-host stable room slot is the only elected successor;
-4. synchronized survivors derive the same new authority session ID;
-5. only that successor calls `SolarAuthorityPromotion.CreatePromotedHost(...)`;
-6. `SolarRoomMigration.CreateSession(...)` rebuilds room authority around the successor without rewriting player slots;
-7. Nearby/Bluetooth migration switches stop the old topology before opening the successor/server topology;
-8. Grid Duel now invokes this path automatically when a synchronized two-player match loses its authenticated peer link.
+1. authoritative turns carry canonical state digests;
+2. a client applies the turn through its reducer and verifies the resulting digest;
+3. only then does it return `ReplicationAck(nextTurnIndex, stateHash)`;
+4. the host validates that acknowledgement against authoritative state and advances that peer's replication frontier;
+5. synchronized peers can capture `SolarAuthorityCheckpoint` and derive a deterministic successor/new authority epoch;
+6. only the elected successor promotes itself and rebuilds the room/transport topology.
 
-Transient `IsConnected` values do not affect successor choice or epoch ID. This intentionally favors split-brain safety over fallback liveness. Grid Duel also refuses automatic promotion if its local canonical state bytes no longer match the last authoritative digest observed by the current session.
+A completed `SendAsync` is **not** remote durability evidence. The acknowledgement is the first explicit proof that the remote state machine accepted and reproduced the authoritative state. Snapshot recovery uses the same rule: ACK occurs only after snapshot digest verification, restore, and canonical rehash.
+
+SolarNet 0.15 still does not claim transactional durability for a host-local turn. A host can mutate its own state and fail before the elected successor observes that commit. The successor cannot discover an unseen newer commit merely from an ACK ledger. Therefore 0.15 establishes the replication-proof primitive; the next durability milestone must gate when a commit is declared migration-safe/user-visible on an acknowledgement from the designated replica and define timeout/provisional-state semantics explicitly.
+
+Transient `IsConnected` values do not affect successor choice or authority epoch ID. Grid Duel also refuses automatic promotion if its canonical state no longer matches the last authoritative digest observed by the session.
 
 Nearby can rediscover the migrated room and request the elected successor endpoint. Bluetooth Classic retains the device address associated with the previously authenticated SolarNet peer, allowing automatic reconnect to the elected successor when that address is known. If no authenticated address exists, paired-device selection remains explicit; SolarNet does not guess peer identity.
 
-A two-player link-loss migration has an unavoidable evidence boundary without a replication acknowledgement/quorum protocol: the elected successor can only preserve the latest authoritative commit it actually observed. A final host-local commit that never reached the successor before the link failed can be lost. SolarNet 0.14 therefore describes this as recovery to the **latest replicated authoritative state**, not guaranteed preservation of host-only in-flight state.
-
-See `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md`.
+See `docs/replication-ack.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md`.
 
 ## Repository layout
 
@@ -55,12 +54,12 @@ Packages/com.hoonex.solarnet/
   Runtime/Room/                     room lifecycle + migration planning/bootstrap
   Runtime/State/                    reducer / digest / journal / snapshots
   Runtime/Turns/                    authoritative turn state + checkpoint restore
-  Runtime/Session/                  game orchestration + authority checkpoint/promotion
+  Runtime/Session/                  game orchestration + replication ACKs + authority promotion
   Plugins/Android/                  Nearby + Bluetooth Classic .androidlib bridges
   Samples~/Diagnostics/             two-phone transport/room diagnostics
   Samples~/GridDuel/                local + two-phone playable 2D sample + migration workflow
 src/SolarNet.Core/                  .NET build wrapper
-tests/                              protocol, recovery, chaos, resume, authority/migration, room, game, Android gates
+tests/                              protocol, recovery, replication, chaos, migration, room, game, Android gates
 android-smoke/                      Android library + probe APK build harness
 docs/                               architecture and integration contracts
 ```
@@ -78,6 +77,7 @@ docs/                               architecture and integration contracts
 9. Deterministic room-level successor/epoch planning — done.
 10. Migrated-room bootstrap + Nearby/Bluetooth transport role switching — done in deterministic CI models.
 11. Grid Duel synchronized link-loss authority migration — wired into the Unity sample and deterministic smoke tests.
-12. Next: persist migrated authority epochs across process death, add a replicated-commit durability barrier, then perform physical multi-phone radio soak and release hardening.
+12. State-verified replication acknowledgements and per-peer proof frontiers — done.
+13. Next: build a designated-replica durable-commit barrier, persist migrated authority epochs across process death, then perform physical multi-phone radio soak and release hardening.
 
-Read `docs/chaos-soak.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md` for recovery contracts and limits.
+Read `docs/replication-ack.md`, `docs/chaos-soak.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md` for recovery contracts and limits.
