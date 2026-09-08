@@ -1,0 +1,18 @@
+{
+  "name": "com.hoonex.solarnet",
+  "version": "0.1.0",
+  "displayName": "SolarNet",
+  "description": "Local-first multiplayer engine for turn-based games.",
+  "unity": "6000.0",
+  "author": {
+    "name": "hoonex"
+  },
+  "license": "MIT",
+  "keywords": [
+    "multiplayer",
+    "turn-based",
+    "p2p",
+    "nearby",
+    "networking"
+  ]
+}

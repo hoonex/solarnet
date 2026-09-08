@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build SolarNet core
+        run: dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
+      - name: Run smoke tests
+        run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
