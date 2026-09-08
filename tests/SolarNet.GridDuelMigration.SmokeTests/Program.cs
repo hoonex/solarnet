@@ -114,6 +114,8 @@ internal static class Program
             Equal(0, FindPlayer(successorRoom.RoomSession.CurrentSnapshot, "host").Slot, "former host keeps slot zero");
             Equal(1, FindPlayer(successorRoom.RoomSession.CurrentSnapshot, "client").Slot, "successor keeps slot one");
             True(successorGame.IsHost, "successor owns promoted game authority");
+            True(successorGame.DurabilityBarrierEnabled, "promoted successor keeps a durability barrier");
+            Equal("host", successorGame.RequiredReplicationPeerId, "former host becomes the promoted authority replica");
             True(!formerHostGame.IsHost, "former host is fenced to client role");
 
             await formerHostGame.RequestResyncAsync(0).ConfigureAwait(false);
@@ -320,7 +322,9 @@ internal static class Program
             hostStart.HostPeerId,
             fixture.HostTransport,
             hostStart.CreateHostTurnCoordinator(),
-            fixture.HostState);
+            fixture.HostState,
+            256,
+            "client");
         fixture.ClientGame = new SolarTurnSession(
             clientStart.GameSessionId,
             clientStart.HostPeerId,

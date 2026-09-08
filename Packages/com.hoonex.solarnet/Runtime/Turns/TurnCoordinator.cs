@@ -12,7 +12,8 @@ namespace SolarNet.Turns
         DuplicateOrOutOfOrderSequence = 4,
         InvalidAction = 5,
         ProtocolViolation = 6,
-        GameRuleRejected = 7
+        GameRuleRejected = 7,
+        ReplicationPending = 8
     }
 
     public sealed class SolarTurnAction

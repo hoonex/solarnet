@@ -51,7 +51,8 @@ namespace SolarNet.Session
             ISolarTransport transport,
             TurnCoordinator hostCoordinator = null,
             ISolarGameStateMachine gameStateMachine = null,
-            int journalCapacity = 256)
+            int journalCapacity = 256,
+            string requiredReplicationPeerId = null)
         {
             if (string.IsNullOrWhiteSpace(sessionId)) throw new ArgumentException("Session ID is required.", nameof(sessionId));
             if (string.IsNullOrWhiteSpace(hostPeerId)) throw new ArgumentException("Host peer ID is required.", nameof(hostPeerId));
@@ -71,6 +72,7 @@ namespace SolarNet.Session
                 throw new ArgumentException("Only the host session may own the TurnCoordinator.", nameof(hostCoordinator));
 
             InitializeReplicationAcknowledgements(journalCapacity);
+            InitializeDurabilityBarrier(requiredReplicationPeerId);
 
             if (IsHost)
             {
@@ -249,9 +251,16 @@ namespace SolarNet.Session
 
         private async Task CommitAsHostAsync(SolarTurnAction action, CancellationToken cancellationToken)
         {
+            Task durabilityTask = Task.CompletedTask;
             await _hostGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (HasPendingDurabilityCommit())
+                {
+                    await RejectAsHostAsync(action.ActorId, SolarTurnRejectReason.ReplicationPending, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
                 SolarTurnCommit commit;
                 SolarTurnRejectReason reason;
                 Func<SolarTurnAction, bool> validator = null;
@@ -274,6 +283,7 @@ namespace SolarNet.Session
                 commit = commit.WithStateHash(stateHash);
                 _journal.Add(commit);
                 SetKnownState(commit.NextTurnIndex, commit.NextPlayerId, commit.Round, stateHash);
+                durabilityTask = BeginDurabilityBarrier(commit);
                 RaiseCommitted(commit);
 
                 var committedPacket = CreateCommittedPacket(commit);
@@ -283,6 +293,8 @@ namespace SolarNet.Session
             {
                 _hostGate.Release();
             }
+
+            await WaitForDurabilityAsync(durabilityTask, cancellationToken).ConfigureAwait(false);
         }
 
         private async Task RejectAsHostAsync(string actorId, SolarTurnRejectReason reason, CancellationToken cancellationToken)
