@@ -63,6 +63,7 @@ namespace SolarNet.Samples.GridDuel
 
         private void Awake()
         {
+            LoadPersistedAuthorityMetadata();
             AddLog("Networked Grid Duel loaded.");
 #if !UNITY_ANDROID || UNITY_EDITOR
             AddLog("Physical transports need an Android Player build. Use GridDuelLocalDemo in the Editor.");
@@ -84,9 +85,10 @@ namespace SolarNet.Samples.GridDuel
 
         private void DrawSetup()
         {
+            DrawPersistedAuthorityControls();
             GUILayout.Label("1. Role");
             GUILayout.BeginHorizontal();
-            GUI.enabled = !_busy;
+            GUI.enabled = !_busy && !HasPersistedAuthorityBlob;
             if (GUILayout.Button(_isHost ? "HOST ✓" : "Host")) _isHost = true;
             if (GUILayout.Button(!_isHost ? "CLIENT ✓" : "Client")) _isHost = false;
             GUILayout.EndHorizontal();
@@ -100,7 +102,9 @@ namespace SolarNet.Samples.GridDuel
             GUILayout.EndHorizontal();
 
             if (!_isHost) GUILayout.Label("Client peer identity persists across app restarts for active-match resume.");
+            GUI.enabled = !_busy;
             if (GUILayout.Button("Request Android permissions", GUILayout.Height(38f))) RequestAndroidPermissions();
+            GUI.enabled = !_busy && !HasPersistedAuthorityBlob;
             if (GUILayout.Button(_isHost ? "Start Grid Duel host" : "Start Grid Duel client", GUILayout.Height(46f))) StartNetworkedMatch();
             GUI.enabled = true;
         }
@@ -216,7 +220,7 @@ namespace SolarNet.Samples.GridDuel
 
         private bool CanActLocally()
         {
-            return !_busy && _game != null && _gameState != null && !_gameState.IsFinished &&
+            return !_busy && !_authorityResumeAwaitingReplicaProof && _game != null && _gameState != null && !_gameState.IsFinished &&
                    string.Equals(_game.KnownCurrentPlayerId, _localPeerId, StringComparison.Ordinal);
         }
 
@@ -267,6 +271,11 @@ namespace SolarNet.Samples.GridDuel
         private async void StartNetworkedMatch()
         {
             if (_busy || _started) return;
+            if (HasPersistedAuthorityBlob)
+            {
+                _status = "Resume or discard the saved authority epoch before starting a new match.";
+                return;
+            }
             _busy = true;
             try
             {
@@ -597,6 +606,7 @@ namespace SolarNet.Samples.GridDuel
                     requiredReplica);
                 SubscribeGame(_game);
                 await _game.StartAsync();
+                if (_isHost) PersistCurrentAuthorityEpoch("game start");
 
                 if (!_isHost && _resumeFromProcessRestart)
                 {
@@ -635,6 +645,7 @@ namespace SolarNet.Samples.GridDuel
             try
             {
                 await ShutdownAsync();
+                ClearPersistedAuthorityEpoch();
                 _status = "Stopped.";
             }
             finally
@@ -695,6 +706,8 @@ namespace SolarNet.Samples.GridDuel
             _localPeerId = string.Empty;
             _sawLobbyBeforePlaying = false;
             _resumeFromProcessRestart = false;
+            _authorityResumeAwaitingReplicaProof = false;
+            _authorityResumeProofTurn = 0;
             ClearMigrationRuntimeState();
         }
 
