@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/SolarNet.Core/SolarNet.Core.csproj" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Android/**/*.cs" />
     <Compile Include="../../Packages/com.hoonex.solarnet/Samples~/GridDuel/*.cs" />
     <Compile Include="UnityEngineStubs.cs" />
   </ItemGroup>
