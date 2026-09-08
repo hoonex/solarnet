@@ -217,6 +217,8 @@ namespace SolarNet.Session
                 string.IsNullOrWhiteSpace(record.RequiredReplicationPeerId)
                     ? null
                     : record.RequiredReplicationPeerId);
+            if (!string.IsNullOrWhiteSpace(record.RequiredReplicationPeerId))
+                game.RequireDurabilityRevalidation(checkpoint.NextTurnIndex, checkpoint.StateHash);
             var start = new SolarGameStartInfo(
                 record.RoomSnapshot.GameSessionId,
                 record.RoomSnapshot.HostPeerId,

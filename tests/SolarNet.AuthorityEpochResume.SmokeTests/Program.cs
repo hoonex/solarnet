@@ -99,6 +99,8 @@ internal static class Program
             resumed = SolarAuthorityEpochResume.Create(decoded, resumedTransport, resumedState);
             resumed.RoomSession.Attach();
             resumed.GameSession.ProtocolFaulted += faults.Add;
+            var preProofRejection = new TaskCompletionSource<SolarTurnRejection>(TaskCreationOptions.RunContinuationsAsynchronously);
+            replica.ActionRejected += rejection => preProofRejection.TrySetResult(rejection);
             await resumed.GameSession.StartAsync().ConfigureAwait(false);
 
             Equal(12, resumedState.Value, "restored canonical state");
@@ -118,10 +120,18 @@ internal static class Program
                 resumed.GameSession,
                 resumedState);
             Equal(4L, recaptured.GameCheckpoint.NextTurnIndex, "immediate post-resume recapture frontier");
+            True(resumed.GameSession.DurabilityRevalidationPending, "restored host requires replica revalidation before accepting turns");
+
+            await replica.SubmitActionAsync("add", EncodeInt(99)).ConfigureAwait(false);
+            await WaitAsync(preProofRejection.Task, "pre-proof replication-pending rejection").ConfigureAwait(false);
+            var rejected = await preProofRejection.Task.ConfigureAwait(false);
+            Equal(SolarTurnRejectReason.ReplicationPending, rejected.Reason, "pre-proof action rejection reason");
+            Equal(4L, resumed.GameSession.KnownNextTurnIndex, "pre-proof action cannot advance restored authority");
+            Equal(12, resumedState.Value, "pre-proof action cannot mutate restored state");
 
             await replica.RequestResyncAsync(4).ConfigureAwait(false);
             await WaitUntilAsync(
-                () => resumed.GameSession.GetReplicationFrontier("host") >= 4,
+                () => !resumed.GameSession.DurabilityRevalidationPending && resumed.GameSession.GetReplicationFrontier("host") >= 4,
                 "replica proof after restored-host snapshot").ConfigureAwait(false);
             await replica.SubmitActionAsync("add", EncodeInt(4)).ConfigureAwait(false);
 
