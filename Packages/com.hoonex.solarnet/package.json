@@ -1,8 +1,8 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "displayName": "SolarNet",
-  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic resync, room/lobby lifecycle, and Unity diagnostics.",
+  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic resync, room/lobby lifecycle, Unity diagnostics, and a playable 2D sample.",
   "unity": "6000.0",
   "author": {
     "name": "hoonex"
@@ -24,6 +24,11 @@
       "displayName": "SolarNet Diagnostics",
       "description": "Two-phone Android diagnostics for Nearby, Bluetooth Classic, room lifecycle, and turn packets.",
       "path": "Samples~/Diagnostics"
+    },
+    {
+      "displayName": "Grid Duel",
+      "description": "Playable 5x5 two-player turn game running through two real SolarTurnSession instances over LoopbackTransport.",
+      "path": "Samples~/GridDuel"
     }
   ]
 }

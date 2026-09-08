@@ -22,6 +22,8 @@ jobs:
         run: dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
       - name: Compile Unity Android C# bridge surface
         run: dotnet build tests/SolarNet.UnityAndroidCompile/SolarNet.UnityAndroidCompile.csproj --configuration Release --nologo
+      - name: Compile Grid Duel Unity sample surface
+        run: dotnet build tests/SolarNet.GridDuel.UnityCompile/SolarNet.GridDuel.UnityCompile.csproj --configuration Release --nologo
       - name: Run multiplayer smoke tests
         run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
       - name: Run state-integrity smoke tests
@@ -30,6 +32,8 @@ jobs:
         run: dotnet run --project tests/SolarNet.Room.SmokeTests/SolarNet.Room.SmokeTests.csproj --configuration Release --nologo
       - name: Run Bluetooth Classic smoke tests
         run: dotnet run --project tests/SolarNet.BluetoothClassic.SmokeTests/SolarNet.BluetoothClassic.SmokeTests.csproj --configuration Release --nologo
+      - name: Run Grid Duel integration tests
+        run: dotnet run --project tests/SolarNet.GridDuel.SmokeTests/SolarNet.GridDuel.SmokeTests.csproj --configuration Release --nologo
 
   android-transports:
     runs-on: ubuntu-latest
