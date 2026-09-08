@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using SolarNet.Room;
 using SolarNet.Samples.GridDuel;
 using SolarNet.Session;
 using SolarNet.State;
@@ -15,7 +16,8 @@ internal static class Program
         {
             SnapshotIsCanonicalAndRestorable,
             InvalidGameActionDoesNotAdvanceTurn,
-            NetworkedMatchConvergesAndProducesWinner
+            NetworkedMatchConvergesAndProducesWinner,
+            RoomLifecycleTransitionsIntoGridDuelMatch
         };
         var passed = 0;
         foreach (var test in tests)
@@ -96,22 +98,7 @@ internal static class Program
         await client.StartAsync().ConfigureAwait(false);
         try
         {
-            await Move(host, 1, 2).ConfigureAwait(false);
-            AssertConverged(hostState, clientState, "after sun move 1");
-            await Move(client, 3, 2).ConfigureAwait(false);
-            AssertConverged(hostState, clientState, "after moon move 1");
-            await Move(host, 2, 2).ConfigureAwait(false);
-            AssertConverged(hostState, clientState, "after sun closes distance");
-            await Attack(client).ConfigureAwait(false);
-            await Attack(host).ConfigureAwait(false);
-            await Attack(client).ConfigureAwait(false);
-            await Attack(host).ConfigureAwait(false);
-            await Attack(client).ConfigureAwait(false);
-
-            AssertConverged(hostState, clientState, "at match end");
-            Equal("moon", hostState.WinnerPeerId, "winner");
-            Equal(0, hostState.GetPlayer("sun").Health, "defeated health");
-            Equal(0L, host.KnownNextTurnIndex - client.KnownNextTurnIndex, "turn indices converge");
+            await PlayMoonWinAsync(host, client, hostState, clientState).ConfigureAwait(false);
             Equal(0, faults.Count, "protocol faults");
         }
         finally
@@ -119,6 +106,88 @@ internal static class Program
             await client.StopAsync().ConfigureAwait(false);
             await host.StopAsync().ConfigureAwait(false);
         }
+    }
+
+    private static async Task RoomLifecycleTransitionsIntoGridDuelMatch()
+    {
+        var hub = new LoopbackTransportHub();
+        var hostTransport = hub.CreateEndpoint("host");
+        var clientTransport = hub.CreateEndpoint("client");
+        await hostTransport.StartAsync().ConfigureAwait(false);
+        await clientTransport.StartAsync().ConfigureAwait(false);
+
+        var hostRoom = new SolarRoomSession(new SolarRoomOptions("grid-room", "host", "SUN", "grid-duel-v1", "Grid Duel", 2), hostTransport);
+        var clientRoom = new SolarRoomSession(new SolarRoomOptions("grid-room", "host", "MOON", "grid-duel-v1", "Grid Duel", 2), clientTransport);
+        var clientStartSignal = new TaskCompletionSource<SolarGameStartInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var faults = new List<Exception>();
+        hostRoom.ProtocolFaulted += faults.Add;
+        clientRoom.ProtocolFaulted += faults.Add;
+        clientRoom.GameStarted += info => clientStartSignal.TrySetResult(info);
+        hostRoom.Attach();
+        clientRoom.Attach();
+
+        SolarTurnSession hostGame = null;
+        SolarTurnSession clientGame = null;
+        try
+        {
+            await clientRoom.NotifyPeerConnectedAsync("host").ConfigureAwait(false);
+            Equal(SolarRoomPhase.Lobby, clientRoom.Phase, "client enters lobby");
+            Equal(2, hostRoom.CurrentSnapshot.Players.Length, "two-player roster");
+
+            await hostRoom.SetReadyAsync(true).ConfigureAwait(false);
+            await clientRoom.SetReadyAsync(true).ConfigureAwait(false);
+            True(hostRoom.CanStart, "host can start two ready players");
+
+            var hostStart = await hostRoom.StartGameAsync("grid-room-game").ConfigureAwait(false);
+            var clientStart = await WaitAsync(clientStartSignal.Task, "client Grid Duel start").ConfigureAwait(false);
+            Equal(hostStart.GameSessionId, clientStart.GameSessionId, "shared game session id");
+            Equal(2, hostStart.PlayerIds.Length, "exactly two game players");
+            Equal(hostStart.PlayerIds[0], clientStart.PlayerIds[0], "player zero order");
+            Equal(hostStart.PlayerIds[1], clientStart.PlayerIds[1], "player one order");
+
+            var hostState = new GridDuelStateMachine(hostStart.PlayerIds[0], hostStart.PlayerIds[1]);
+            var clientState = new GridDuelStateMachine(clientStart.PlayerIds[0], clientStart.PlayerIds[1]);
+            hostGame = new SolarTurnSession(hostStart.GameSessionId, hostStart.HostPeerId, hostTransport, hostStart.CreateHostTurnCoordinator(), hostState);
+            clientGame = new SolarTurnSession(clientStart.GameSessionId, clientStart.HostPeerId, clientTransport, null, clientState);
+            hostGame.ProtocolFaulted += faults.Add;
+            clientGame.ProtocolFaulted += faults.Add;
+            await hostGame.StartAsync().ConfigureAwait(false);
+            await clientGame.StartAsync().ConfigureAwait(false);
+
+            await PlayMoonWinAsync(hostGame, clientGame, hostState, clientState).ConfigureAwait(false);
+            Equal(SolarRoomPhase.Playing, hostRoom.Phase, "host room remains playing");
+            Equal(SolarRoomPhase.Playing, clientRoom.Phase, "client room remains playing");
+            Equal(0, faults.Count, "room plus game protocol faults");
+        }
+        finally
+        {
+            hostRoom.Detach();
+            clientRoom.Detach();
+            if (clientGame != null) await clientGame.StopAsync().ConfigureAwait(false);
+            else await clientTransport.StopAsync().ConfigureAwait(false);
+            if (hostGame != null) await hostGame.StopAsync().ConfigureAwait(false);
+            else await hostTransport.StopAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static async Task PlayMoonWinAsync(SolarTurnSession host, SolarTurnSession client, GridDuelStateMachine hostState, GridDuelStateMachine clientState)
+    {
+        await Move(host, 1, 2).ConfigureAwait(false);
+        AssertConverged(hostState, clientState, "after first player move");
+        await Move(client, 3, 2).ConfigureAwait(false);
+        AssertConverged(hostState, clientState, "after second player move");
+        await Move(host, 2, 2).ConfigureAwait(false);
+        AssertConverged(hostState, clientState, "after players become adjacent");
+        await Attack(client).ConfigureAwait(false);
+        await Attack(host).ConfigureAwait(false);
+        await Attack(client).ConfigureAwait(false);
+        await Attack(host).ConfigureAwait(false);
+        await Attack(client).ConfigureAwait(false);
+
+        AssertConverged(hostState, clientState, "at match end");
+        Equal(client.LocalPeerId, hostState.WinnerPeerId, "second player wins scripted match");
+        Equal(0, hostState.GetPlayer(host.LocalPeerId).Health, "first player defeated");
+        Equal(0L, host.KnownNextTurnIndex - client.KnownNextTurnIndex, "turn indices converge");
     }
 
     private static Task Move(SolarTurnSession session, int x, int y)
@@ -134,6 +203,13 @@ internal static class Program
     private static void AssertConverged(GridDuelStateMachine host, GridDuelStateMachine client, string label)
     {
         BytesEqual(host.CaptureSnapshot(), client.CaptureSnapshot(), label);
+    }
+
+    private static async Task<T> WaitAsync<T>(Task<T> task, string label)
+    {
+        var completed = await Task.WhenAny(task, Task.Delay(3000)).ConfigureAwait(false);
+        if (!ReferenceEquals(completed, task)) throw new TimeoutException("Timed out waiting for " + label + ".");
+        return await task.ConfigureAwait(false);
     }
 
     private static void BytesEqual(byte[] expected, byte[] actual, string label)
