@@ -54,7 +54,8 @@ namespace SolarNet.Nearby
             SolarHostMigrationPlan plan,
             string serviceId,
             NearbyConnectionStrategy strategy = NearbyConnectionStrategy.Star,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            Action<NearbyTransport> configureTransport = null)
         {
             if (currentTransport == null) throw new ArgumentNullException(nameof(currentTransport));
             if (adapter == null) throw new ArgumentNullException(nameof(adapter));
@@ -75,6 +76,7 @@ namespace SolarNet.Nearby
                 currentTransport.LocalPeerId,
                 adapter,
                 new NearbyTransportOptions(serviceId, endpointName, role, strategy, true));
+            if (configureTransport != null) configureTransport(next);
             await next.StartAsync(cancellationToken).ConfigureAwait(false);
             return new NearbyMigrationSwitchResult(next, role, sourceSnapshot, plan);
         }
