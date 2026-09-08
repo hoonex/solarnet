@@ -36,6 +36,8 @@ jobs:
         run: dotnet run --project tests/SolarNet.ChaosSoak.SmokeTests/SolarNet.ChaosSoak.SmokeTests.csproj --configuration Release --nologo
       - name: Run client process-resume tests
         run: dotnet run --project tests/SolarNet.ProcessResume.SmokeTests/SolarNet.ProcessResume.SmokeTests.csproj --configuration Release --nologo
+      - name: Run authority epoch process-resume tests
+        run: dotnet run --project tests/SolarNet.AuthorityEpochResume.SmokeTests/SolarNet.AuthorityEpochResume.SmokeTests.csproj --configuration Release --nologo
       - name: Run authority-checkpoint promotion tests
         run: dotnet run --project tests/SolarNet.AuthorityCheckpoint.SmokeTests/SolarNet.AuthorityCheckpoint.SmokeTests.csproj --configuration Release --nologo
       - name: Run host-migration planner tests
