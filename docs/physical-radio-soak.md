@@ -1,0 +1,148 @@
+# Physical Bluetooth radio soak
+
+SolarNet's transport Probe APK includes a bounded, machine-readable Bluetooth Classic RFCOMM soak harness. This harness is intended to turn a two-phone radio test into reproducible evidence instead of a visual "it connected once" check.
+
+The harness being present and compiling in CI does **not** prove physical-radio reliability. Until a real two-phone run is captured, Bluetooth device runtime, latency distribution, thermal behavior, and power behavior remain unverified.
+
+## What the soak measures
+
+The client sends one framed probe per second for ten minutes by default:
+
+```text
+SNP1|PING|<runId>|<sequence>|<clientElapsedRealtimeNanos>
+```
+
+The host echoes the same run ID, sequence, and client timestamp:
+
+```text
+SNP1|PONG|<runId>|<sequence>|<clientElapsedRealtimeNanos>
+```
+
+The client measures round-trip time with Android's monotonic `SystemClock.elapsedRealtimeNanos()`. The host never compares clocks with the client; it only echoes the client timestamp.
+
+The final record includes:
+
+- unique probes sent and accepted PONGs;
+- missing responses and loss percentage;
+- duplicate responses;
+- invalid/foreign/malformed responses;
+- disconnect and bridge/send error counters;
+- minimum, average, and maximum RTT;
+- elapsed duration;
+- device model, Android SDK level, transport, and Probe version.
+
+A `clean=true` result means that the run sent at least one probe and observed no missing, duplicate, invalid, disconnect, or error evidence. It is a transport-test result, not a general device-quality certification.
+
+## Build identity
+
+Use the Probe APK produced by the CI run for the exact source commit being tested. CI also uploads `probe-app-debug.apk.sha256`; preserve that checksum with the test record.
+
+The Probe is an internal debug artifact, not a signed production release APK.
+
+## Two-phone Bluetooth Classic procedure
+
+1. Install the same Probe APK build on both Android phones.
+2. Pair the phones in Android Bluetooth settings before launching the RFCOMM test.
+3. Open the Probe on both phones and grant `BLUETOOTH_CONNECT` when Android requires it.
+4. On phone A, press **HOST: start RFCOMM server**.
+5. On phone B, press **CLIENT: refresh paired devices**, then connect to phone A.
+6. Confirm both screens show a connected state. A manual **Broadcast PING** may be used as a quick preflight, but it is not soak evidence.
+7. On phone B only, press **CLIENT: start 10-minute soak**.
+8. Leave the connection active until the run reports `completionReason=completed`. Do not treat a manually stopped run as a completed soak.
+9. Capture the machine-readable result from phone B's logcat.
+
+The host handles the framed soak packets without adding one UI-log row for every PONG operation. The client also suppresses successful per-ping operation log rows; this avoids making the UI log itself a significant part of the 1 Hz measurement workload.
+
+## Capturing the result
+
+With ADB attached to the client phone:
+
+```bash
+adb logcat -s SolarNetProbe:I
+```
+
+At completion, the app writes a line beginning with:
+
+```text
+SOLARNET_PROBE_RESULT
+```
+
+The remainder is JSON. Example shape:
+
+```json
+{
+  "transport": "bluetooth-classic",
+  "probeVersion": "0.2.0",
+  "deviceModel": "manufacturer model",
+  "sdkInt": 36,
+  "result": {
+    "schema": 1,
+    "runId": "...",
+    "completionReason": "completed",
+    "clean": true,
+    "elapsedSeconds": 600.0,
+    "sent": 600,
+    "pong": 600,
+    "missing": 0,
+    "lossPercent": 0.0,
+    "duplicate": 0,
+    "invalid": 0,
+    "disconnects": 0,
+    "errors": 0,
+    "minRttMs": 0.0,
+    "avgRttMs": 0.0,
+    "maxRttMs": 0.0
+  }
+}
+```
+
+Do not require exactly 600 sends as an invariant. Android scheduling and device conditions can shift tick timing. A completed ten-minute run should be approximately that size, while the recorded counters and elapsed duration are the evidence.
+
+## Functional acceptance
+
+For the first physical baseline, record rather than invent a latency SLA. Recommended minimum evidence is:
+
+- `completionReason=completed`;
+- no disconnects or bridge/send errors;
+- zero missing, duplicate, and invalid responses preferred;
+- min/average/max RTT preserved exactly as measured;
+- both device models and Android versions recorded;
+- source commit SHA and APK SHA-256 recorded.
+
+A non-clean run is useful evidence. Do not rerun until a clean result appears and discard the failure; retain the failing record and classify the observed failure before changing code.
+
+## Thermal and power evidence
+
+`BUILD_GREEN` and a clean packet soak are not `THERMAL_VERIFIED` or `POWER_VERIFIED`.
+
+For a representative device run, record the device model, Android build, source SHA, APK checksum, test duration, starting battery/thermal state, and end state. Useful ADB snapshots include:
+
+```bash
+adb shell dumpsys thermalservice
+adb shell dumpsys batterystats --reset
+# run the representative soak
+adb shell dumpsys batterystats com.hoonex.solarnet.probe
+```
+
+Where supported, also inspect CPU/memory during the run. OEM telemetry differs, so missing thermal fields must be reported as unavailable rather than inferred.
+
+## Evidence state before a real run
+
+After CI builds this harness successfully, the correct status is:
+
+```text
+SOURCE_VERIFIED
+COMPILE_GREEN
+TEST_GREEN          # deterministic ProbeSoakStats JVM smoke
+ARTIFACT_VERIFIED   # Probe APK + checksum produced in CI
+DEVICE_RUNTIME_UNVERIFIED
+PERF_UNVERIFIED
+THERMAL_UNVERIFIED
+POWER_UNVERIFIED
+```
+
+A later physical test may upgrade only the evidence classes actually measured.
+
+## Scope
+
+This milestone instruments Bluetooth Classic RFCOMM first. The existing SolarNet Nearby transport still requires its own equivalent physical soak path before comparing Nearby and Bluetooth under the same metrics.
