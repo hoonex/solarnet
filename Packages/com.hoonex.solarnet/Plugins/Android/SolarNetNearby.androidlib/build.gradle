@@ -10,7 +10,7 @@ android {
     compileSdk unityProperty('unity.compileSdkVersion', '36') as int
 
     defaultConfig {
-        minSdk unityProperty('unity.minSdkVersion', '23') as int
+        minSdk Math.max(unityProperty('unity.minSdkVersion', '24') as int, 24)
         targetSdk unityProperty('unity.targetSdkVersion', '36') as int
     }
 

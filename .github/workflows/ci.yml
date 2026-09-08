@@ -80,6 +80,18 @@ jobs:
         run: gradle -p android-smoke :solarnet-bluetooth-classic:assembleDebug --no-daemon --stacktrace
       - name: Build physical transport probe APK
         run: gradle -p android-smoke :probe-app:assembleDebug --no-daemon --stacktrace
+      - name: Verify Probe 0.3.0 merged radio manifest
+        run: |
+          APK="android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee /tmp/probe-badging.txt
+          grep -Fq "versionCode='3'" /tmp/probe-badging.txt
+          grep -Fq "versionName='0.3.0'" /tmp/probe-badging.txt
+          "$AAPT" dump permissions "$APK" | tee /tmp/probe-permissions.txt
+          grep -Fq 'android.permission.BLUETOOTH_ADVERTISE' /tmp/probe-permissions.txt
+          grep -Fq 'android.permission.BLUETOOTH_CONNECT' /tmp/probe-permissions.txt
+          grep -Fq 'android.permission.BLUETOOTH_SCAN' /tmp/probe-permissions.txt
+          grep -Fq 'android.permission.NEARBY_WIFI_DEVICES' /tmp/probe-permissions.txt
       - name: Write probe checksum
         run: |
           cd android-smoke/probe-app/build/outputs/apk/debug

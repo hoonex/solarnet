@@ -2,8 +2,6 @@ package com.hoonex.solarnet.probe;
 
 import android.os.SystemClock;
 
-import com.hoonex.solarnet.bluetoothclassic.SolarBluetoothClassicBridge;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,7 +28,7 @@ public final class ProbeSoakController implements AutoCloseable {
     private static final String PONG = "PONG";
 
     private final Object gate = new Object();
-    private final SolarBluetoothClassicBridge bridge;
+    private final ProbeByteLink link;
     private final LongSupplier nextRequestId;
     private final Listener listener;
     private final ScheduledExecutorService scheduler;
@@ -43,13 +41,13 @@ public final class ProbeSoakController implements AutoCloseable {
     private long nextSequence;
 
     public ProbeSoakController(
-            SolarBluetoothClassicBridge bridge,
+            ProbeByteLink link,
             LongSupplier nextRequestId,
             Listener listener) {
-        if (bridge == null) throw new IllegalArgumentException("bridge is required");
+        if (link == null) throw new IllegalArgumentException("link is required");
         if (nextRequestId == null) throw new IllegalArgumentException("nextRequestId is required");
         if (listener == null) throw new IllegalArgumentException("listener is required");
-        this.bridge = bridge;
+        this.link = link;
         this.nextRequestId = nextRequestId;
         this.listener = listener;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
@@ -158,7 +156,7 @@ public final class ProbeSoakController implements AutoCloseable {
             long requestId = nextRequestId.getAsLong();
             hostPongOperationIds.add(requestId);
             try {
-                bridge.sendBytes(requestId, connectionId, pong.getBytes(StandardCharsets.UTF_8));
+                link.sendBytes(requestId, connectionId, pong.getBytes(StandardCharsets.UTF_8));
             } catch (Throwable throwable) {
                 hostPongOperationIds.remove(requestId);
                 listener.onLog("SOAK host PONG send failed: " + message(throwable));
@@ -210,7 +208,7 @@ public final class ProbeSoakController implements AutoCloseable {
             requestId = nextRequestId.getAsLong();
             clientPingOperationIds.add(requestId);
             String ping = encode(PING, current.runId(), sequence, now);
-            bridge.broadcastBytes(requestId, ping.getBytes(StandardCharsets.UTF_8));
+            link.broadcastBytes(requestId, ping.getBytes(StandardCharsets.UTF_8));
             if (sequence % 5L == 0L)
                 listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
         } catch (Throwable throwable) {

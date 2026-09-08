@@ -1,8 +1,10 @@
-# Physical Bluetooth radio soak
+# Physical transport radio soak
 
-SolarNet's transport Probe APK includes a bounded, machine-readable Bluetooth Classic RFCOMM soak harness. This harness is intended to turn a two-phone radio test into reproducible evidence instead of a visual "it connected once" check.
+SolarNet's transport Probe APK includes a bounded, machine-readable physical-radio soak harness. Probe 0.3.0 runs the same framed workload and metric accounting over Bluetooth Classic RFCOMM and Google Nearby Connections.
 
-The harness being present and compiling in CI does **not** prove physical-radio reliability. Until a real two-phone run is captured, Bluetooth device runtime, latency distribution, thermal behavior, and power behavior remain unverified.
+The harness being present and compiling in CI does **not** prove physical-radio reliability. Until a real two-phone run is captured, device runtime, latency distribution, thermal behavior, and power behavior remain unverified.
+
+For an apples-to-apples Nearby/Bluetooth procedure, also read `transport-soak-comparison.md`.
 
 ## What the soak measures
 
@@ -43,15 +45,27 @@ The Probe is an internal debug artifact, not a signed production release APK.
 
 1. Install the same Probe APK build on both Android phones.
 2. Pair the phones in Android Bluetooth settings before launching the RFCOMM test.
-3. Open the Probe on both phones and grant `BLUETOOTH_CONNECT` when Android requires it.
-4. On phone A, press **HOST: start RFCOMM server**.
-5. On phone B, press **CLIENT: refresh paired devices**, then connect to phone A.
-6. Confirm both screens show a connected state. A manual **Broadcast PING** may be used as a quick preflight, but it is not soak evidence.
+3. Open the Probe on both phones and press **Request radio permissions** when Android requires it.
+4. On phone A, press **BT HOST: start RFCOMM server**.
+5. On phone B, press **BT CLIENT: refresh paired devices**, then connect to phone A.
+6. Confirm both screens show a connected state. **Broadcast manual PING** may be used as a quick preflight, but it is not soak evidence.
 7. On phone B only, press **CLIENT: start 10-minute soak**.
 8. Leave the connection active until the run reports `completionReason=completed`. Do not treat a manually stopped run as a completed soak.
 9. Capture the machine-readable result from phone B's logcat.
 
-The host handles the framed soak packets without adding one UI-log row for every PONG operation. The client also suppresses successful per-ping operation log rows; this avoids making the UI log itself a significant part of the 1 Hz measurement workload.
+The host handles framed soak packets without adding one UI-log row for every PONG operation. The client also suppresses successful per-ping operation log rows; this avoids making the UI log itself a significant part of the 1 Hz measurement workload.
+
+## Two-phone Nearby procedure
+
+1. Install the same Probe APK build on both phones and grant the radio permissions requested for each Android version.
+2. On phone A, press **Nearby HOST: advertise**.
+3. On phone B, press **Nearby CLIENT: discover** and select phone A when it appears.
+4. Compare the displayed authentication digits on both phones. Accept only when the digits match; reject a mismatch.
+5. After the connection succeeds, Probe stops host advertising and client discovery so continued discovery work is not mixed into the soak workload.
+6. On phone B only, press **CLIENT: start 10-minute soak**.
+7. Leave the connection active until `completionReason=completed` and capture the client result.
+
+Nearby uses the same `ProbeSoakController` and `ProbeSoakStats` owner as Bluetooth Classic. Transport-specific code supplies only the byte send/broadcast link and connection lifecycle.
 
 ## Capturing the result
 
@@ -72,7 +86,7 @@ The remainder is JSON. Example shape:
 ```json
 {
   "transport": "bluetooth-classic",
-  "probeVersion": "0.2.0",
+  "probeVersion": "0.3.0",
   "deviceModel": "manufacturer model",
   "sdkInt": 36,
   "result": {
@@ -95,6 +109,8 @@ The remainder is JSON. Example shape:
   }
 }
 ```
+
+For Nearby, the same record uses `"transport": "nearby-connections"`.
 
 Do not require exactly 600 sends as an invariant. Android scheduling and device conditions can shift tick timing. A completed ten-minute run should be approximately that size, while the recorded counters and elapsed duration are the evidence.
 
@@ -145,4 +161,4 @@ A later physical test may upgrade only the evidence classes actually measured.
 
 ## Scope
 
-This milestone instruments Bluetooth Classic RFCOMM first. The existing SolarNet Nearby transport still requires its own equivalent physical soak path before comparing Nearby and Bluetooth under the same metrics.
+Probe 0.3.0 gives Bluetooth Classic and Nearby the same timed packet/RTT measurement owner, which makes a controlled two-phone comparison possible. It still does not provide physical evidence by itself. Real multi-phone radio, process-kill/relaunch, thermal, and power behavior remain pending until measured on devices.

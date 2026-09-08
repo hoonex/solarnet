@@ -25,7 +25,7 @@ The first target is a 2D mobile game where nearby devices can play together with
 - Unity Diagnostics and playable Grid Duel samples;
 - deterministic 240-turn chaos soak plus recovery, resume, replication, durability, authority-epoch persistence, promotion, migration, and Grid Duel CI gates;
 - Nearby/Bluetooth Android libraries and transport Probe APK built in CI;
-- Bluetooth Classic Probe soak harness with monotonic RTT, loss/duplicate/invalid/disconnect/error counters, machine-readable result output, and deterministic JVM metric tests.
+- Probe 0.3.0 physical-soak harness using one shared monotonic RTT/loss/duplicate/invalid/disconnect/error metric owner for Bluetooth Classic and Nearby, with machine-readable result output and deterministic JVM metric tests.
 
 ## Replication, durability, persistence, and migration
 
@@ -51,9 +51,9 @@ For two-player Grid Duel, the other player is both the deterministic successor a
 
 The authority record's SHA-256 detects accidental corruption but does not authenticate hostile local storage changes. Applications needing tamper resistance should add platform-backed authenticated storage or signatures.
 
-Nearby can rediscover a migrated room and Bluetooth Classic retains authenticated peer device-address hints. The Bluetooth Probe now has a reproducible two-phone soak harness, but compiling that harness is not physical-radio evidence. Physical process-kill/relaunch, Bluetooth soak results, Nearby soak parity, thermal behavior, and power behavior remain unverified until real devices are measured.
+Nearby can rediscover a migrated room and Bluetooth Classic retains authenticated peer device-address hints. Probe 0.3.0 now gives Nearby and Bluetooth Classic the same physical-soak metric semantics, but compiling that harness is not physical-radio evidence. Physical process-kill/relaunch, radio reliability/RTT, thermal behavior, and power behavior remain unverified until real devices are measured.
 
-See `docs/replication-ack.md`, `docs/durability-barrier.md`, `docs/authority-epoch-persistence.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, `docs/gridduel-host-migration.md`, and `docs/physical-radio-soak.md`.
+See `docs/replication-ack.md`, `docs/durability-barrier.md`, `docs/authority-epoch-persistence.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, `docs/gridduel-host-migration.md`, `docs/physical-radio-soak.md`, and `docs/transport-soak-comparison.md`.
 
 ## Repository layout
 
@@ -73,7 +73,7 @@ Packages/com.hoonex.solarnet/
   Samples~/GridDuel/                local + two-phone playable sample + migration/persistence workflow
 src/SolarNet.Core/                  .NET build wrapper
 tests/                              protocol, recovery, replication, durability, persistence, chaos, migration, room, game, Android gates
-android-smoke/                      Android libraries + Probe APK + physical-soak metric harness
+android-smoke/                      Android libraries + dual-transport Probe APK + physical-soak metric harness
 docs/                               architecture, recovery, and physical-evidence contracts
 ```
 
@@ -93,7 +93,8 @@ docs/                               architecture, recovery, and physical-evidenc
 12. State-verified replication acknowledgements and per-peer proof frontiers — done.
 13. Designated-replica durable-turn fence with ACK-loss snapshot recovery — done and wired into Grid Duel.
 14. Persist current/migrated durable authority epochs across authority process death with post-restart replica revalidation — done in deterministic CI models and Unity compile surface.
-15. Bluetooth Classic physical-radio soak harness with machine-readable packet/RTT evidence — implemented and build-verified; real two-phone soak evidence pending.
-16. Next: add Nearby soak parity, run physical multi-phone process-kill/radio/thermal evidence, then evaluate follower-side durable epoch hints and release hardening.
+15. Bluetooth Classic physical-radio soak harness with machine-readable packet/RTT evidence — done and build-verified.
+16. Nearby physical-soak parity using the same controller/metrics and authenticated connection flow — implemented; PR/device evidence pending.
+17. Next after harness verification: physical multi-phone process-kill/radio/thermal evidence, then evaluate follower-side durable epoch hints and release hardening.
 
 Read the documents above for exact recovery contracts, evidence boundaries, and known limitations.
