@@ -16,7 +16,9 @@ internal static class Program
         {
             GameRuleRejectionDoesNotAdvanceTurn,
             DigestMismatchAutomaticallyRestoresSnapshot,
-            MissedCommitReplaysFromJournalBeforeSnapshot
+            MissedCommitReplaysFromJournalBeforeSnapshot,
+            JournalEvictionFallsBackToSnapshot,
+            DuplicateCommittedPacketIsIdempotent
         };
 
         var passed = 0;
@@ -96,7 +98,6 @@ internal static class Program
         {
             await host.SubmitActionAsync("add", new byte[] { 2 }).ConfigureAwait(false);
             clientState.ForceValue(50);
-
             await client.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
             await WaitAsync(snapshotApplied.Task, "snapshot recovery").ConfigureAwait(false);
 
@@ -123,8 +124,7 @@ internal static class Program
         var peer3State = new CounterGameState();
         var hostTransport = hub.CreateEndpoint("host");
         var peer2Transport = hub.CreateEndpoint("peer-2");
-        var peer3Inner = hub.CreateEndpoint("peer-3");
-        var peer3Transport = new DropCommittedTransport(peer3Inner);
+        var peer3Transport = new CommittedFaultTransport(hub.CreateEndpoint("peer-3"));
         var coordinator = new TurnCoordinator(new[] { "host", "peer-2", "peer-3" });
         var host = new SolarTurnSession("journal-room", "host", hostTransport, coordinator, hostState, journalCapacity: 8);
         var peer2 = new SolarTurnSession("journal-room", "host", peer2Transport, null, peer2State);
@@ -152,7 +152,6 @@ internal static class Program
             peer3Transport.DropNextCommitted = true;
             await host.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
             Equal(0, peer3State.Value, "peer3 deliberately missed turn zero");
-
             await peer2.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
             await WaitAsync(peer3CaughtUp.Task, "journal catch-up").ConfigureAwait(false);
 
@@ -168,6 +167,97 @@ internal static class Program
         {
             await peer3.StopAsync().ConfigureAwait(false);
             await peer2.StopAsync().ConfigureAwait(false);
+            await host.StopAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static async Task JournalEvictionFallsBackToSnapshot()
+    {
+        var hub = new LoopbackTransportHub();
+        var hostState = new CounterGameState();
+        var peer2State = new CounterGameState();
+        var peer3State = new CounterGameState();
+        var hostTransport = hub.CreateEndpoint("host");
+        var peer2Transport = hub.CreateEndpoint("peer-2");
+        var peer3Transport = new CommittedFaultTransport(hub.CreateEndpoint("peer-3"));
+        var coordinator = new TurnCoordinator(new[] { "host", "peer-2", "peer-3" });
+        var host = new SolarTurnSession("eviction-room", "host", hostTransport, coordinator, hostState, journalCapacity: 1);
+        var peer2 = new SolarTurnSession("eviction-room", "host", peer2Transport, null, peer2State);
+        var peer3 = new SolarTurnSession("eviction-room", "host", peer3Transport, null, peer3State);
+        var snapshotApplied = NewSignal<SolarStateSnapshot>();
+        var mismatches = new List<SolarStateMismatch>();
+        var faults = new List<Exception>();
+        peer3.SnapshotApplied += snapshotApplied.SetResult;
+        peer3.StateMismatchDetected += mismatches.Add;
+        host.ProtocolFaulted += faults.Add;
+        peer2.ProtocolFaulted += faults.Add;
+        peer3.ProtocolFaulted += faults.Add;
+
+        await host.StartAsync().ConfigureAwait(false);
+        await peer2.StartAsync().ConfigureAwait(false);
+        await peer3.StartAsync().ConfigureAwait(false);
+        try
+        {
+            peer3Transport.DropNextCommitted = true;
+            await host.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
+            await peer2.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
+            var snapshot = await WaitAsync(snapshotApplied.Task, "snapshot fallback after journal eviction").ConfigureAwait(false);
+
+            Equal(2L, snapshot.NextTurnIndex, "snapshot authoritative turn");
+            Equal(2, hostState.Value, "host value after journal eviction scenario");
+            Equal(2, peer3State.Value, "peer3 restored by snapshot after journal eviction");
+            Equal(2L, peer3.KnownNextTurnIndex, "peer3 turn index after snapshot fallback");
+            Equal(host.LastStateHash, peer3.LastStateHash, "snapshot fallback hash convergence");
+            Equal(1, mismatches.Count, "one gap triggers snapshot fallback");
+            Equal(SolarStateMismatchReason.TurnGap, mismatches[0].Reason, "snapshot fallback mismatch reason");
+            Equal(0, faults.Count, "snapshot fallback protocol faults");
+        }
+        finally
+        {
+            await peer3.StopAsync().ConfigureAwait(false);
+            await peer2.StopAsync().ConfigureAwait(false);
+            await host.StopAsync().ConfigureAwait(false);
+        }
+    }
+
+    private static async Task DuplicateCommittedPacketIsIdempotent()
+    {
+        var hub = new LoopbackTransportHub();
+        var hostState = new CounterGameState();
+        var clientState = new CounterGameState();
+        var hostTransport = hub.CreateEndpoint("host");
+        var clientTransport = new CommittedFaultTransport(hub.CreateEndpoint("client"));
+        var coordinator = new TurnCoordinator(new[] { "host", "client" });
+        var host = new SolarTurnSession("duplicate-room", "host", hostTransport, coordinator, hostState);
+        var client = new SolarTurnSession("duplicate-room", "host", clientTransport, null, clientState);
+        var commits = 0;
+        var mismatches = new List<SolarStateMismatch>();
+        var faults = new List<Exception>();
+        client.ActionCommitted += _ => commits++;
+        client.StateMismatchDetected += mismatches.Add;
+        host.ProtocolFaulted += faults.Add;
+        client.ProtocolFaulted += faults.Add;
+
+        await host.StartAsync().ConfigureAwait(false);
+        await client.StartAsync().ConfigureAwait(false);
+        try
+        {
+            clientTransport.DuplicateNextCommitted = true;
+            await host.SubmitActionAsync("add", new byte[] { 2 }).ConfigureAwait(false);
+            Equal(2, clientState.Value, "duplicate commit applies reducer only once");
+            Equal(1L, client.KnownNextTurnIndex, "duplicate commit advances turn only once");
+            Equal(1, commits, "duplicate commit raises one committed event");
+            Equal(0, mismatches.Count, "duplicate old commit does not create false mismatch");
+
+            await client.SubmitActionAsync("add", new byte[] { 1 }).ConfigureAwait(false);
+            Equal(3, hostState.Value, "host remains playable after duplicate delivery");
+            Equal(3, clientState.Value, "client remains playable after duplicate delivery");
+            Equal(host.LastStateHash, client.LastStateHash, "duplicate path hash convergence");
+            Equal(0, faults.Count, "duplicate delivery protocol faults");
+        }
+        finally
+        {
+            await client.StopAsync().ConfigureAwait(false);
             await host.StopAsync().ConfigureAwait(false);
         }
     }
@@ -228,16 +318,17 @@ internal static class Program
         }
     }
 
-    private sealed class DropCommittedTransport : ISolarTransport
+    private sealed class CommittedFaultTransport : ISolarTransport
     {
         private readonly ISolarTransport _inner;
 
-        public DropCommittedTransport(ISolarTransport inner)
+        public CommittedFaultTransport(ISolarTransport inner)
         {
             _inner = inner;
         }
 
         public bool DropNextCommitted { get; set; }
+        public bool DuplicateNextCommitted { get; set; }
         public string LocalPeerId { get { return _inner.LocalPeerId; } }
         public event Func<SolarFrame, Task> FrameReceived;
 
@@ -273,16 +364,31 @@ internal static class Program
 
         private async Task OnInnerFrameAsync(SolarFrame frame)
         {
-            if (DropNextCommitted)
+            var duplicate = false;
+            if (DropNextCommitted || DuplicateNextCommitted)
             {
                 var packet = SolarPacketCodec.Decode(frame.Data);
                 if (packet.Type == SolarPacketType.TurnCommitted)
                 {
-                    DropNextCommitted = false;
-                    return;
+                    if (DropNextCommitted)
+                    {
+                        DropNextCommitted = false;
+                        return;
+                    }
+                    if (DuplicateNextCommitted)
+                    {
+                        DuplicateNextCommitted = false;
+                        duplicate = true;
+                    }
                 }
             }
 
+            await ForwardAsync(frame).ConfigureAwait(false);
+            if (duplicate) await ForwardAsync(frame).ConfigureAwait(false);
+        }
+
+        private async Task ForwardAsync(SolarFrame frame)
+        {
             var handlers = FrameReceived;
             if (handlers == null) return;
             foreach (var handler in handlers.GetInvocationList())
