@@ -34,7 +34,8 @@ public final class ProbeSoakController implements AutoCloseable {
     private final LongSupplier nextRequestId;
     private final Listener listener;
     private final ScheduledExecutorService scheduler;
-    private final Set<Long> soakOperationIds = Collections.synchronizedSet(new HashSet<>());
+    private final Set<Long> clientPingOperationIds = Collections.synchronizedSet(new HashSet<>());
+    private final Set<Long> hostPongOperationIds = Collections.synchronizedSet(new HashSet<>());
 
     private ProbeSoakStats stats;
     private ScheduledFuture<?> scheduled;
@@ -90,14 +91,29 @@ public final class ProbeSoakController implements AutoCloseable {
         finish(reason == null || reason.trim().isEmpty() ? "stopped" : reason);
     }
 
-    public void onOperationResult(long requestId, boolean success, String error) {
-        if (!soakOperationIds.remove(requestId)) return;
-        if (success) return;
-        ProbeSoakStats current = currentStats();
-        if (current == null) return;
-        current.recordError();
-        listener.onLog("SOAK TX operation failed: " + (error == null ? "unknown" : error));
-        listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
+    /**
+     * Returns true when the operation belongs to the soak protocol and should not be duplicated
+     * into the Activity's per-operation UI log.
+     */
+    public boolean onOperationResult(long requestId, boolean success, String error) {
+        if (clientPingOperationIds.remove(requestId)) {
+            if (!success) {
+                ProbeSoakStats current = currentStats();
+                if (current != null) {
+                    current.recordError();
+                    listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
+                }
+                listener.onLog("SOAK PING send failed: " + safe(error));
+            }
+            return true;
+        }
+
+        if (hostPongOperationIds.remove(requestId)) {
+            if (!success) listener.onLog("SOAK PONG echo failed: " + safe(error));
+            return true;
+        }
+
+        return false;
     }
 
     public void onDisconnected() {
@@ -111,7 +127,7 @@ public final class ProbeSoakController implements AutoCloseable {
         ProbeSoakStats current = currentStats();
         if (current == null) return;
         current.recordError();
-        listener.onLog("SOAK bridge error " + operation + ": " + (error == null ? "unknown" : error));
+        listener.onLog("SOAK bridge error " + operation + ": " + safe(error));
         listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
     }
 
@@ -139,9 +155,12 @@ public final class ProbeSoakController implements AutoCloseable {
         if (PING.equals(parts[1])) {
             if (!hostMode) return true;
             String pong = encode(PONG, parts[2], sequence, sentNanos);
+            long requestId = nextRequestId.getAsLong();
+            hostPongOperationIds.add(requestId);
             try {
-                bridge.sendBytes(nextRequestId.getAsLong(), connectionId, pong.getBytes(StandardCharsets.UTF_8));
+                bridge.sendBytes(requestId, connectionId, pong.getBytes(StandardCharsets.UTF_8));
             } catch (Throwable throwable) {
+                hostPongOperationIds.remove(requestId);
                 listener.onLog("SOAK host PONG send failed: " + message(throwable));
             }
             return true;
@@ -173,7 +192,7 @@ public final class ProbeSoakController implements AutoCloseable {
         synchronized (gate) {
             current = stats;
             if (current == null) return;
-            if (now - current.snapshot(now).startedNanos >= durationNanos) {
+            if (now - current.startedNanos() >= durationNanos) {
                 sequence = -1L;
             } else {
                 sequence = ++nextSequence;
@@ -185,15 +204,17 @@ public final class ProbeSoakController implements AutoCloseable {
             return;
         }
 
+        long requestId = -1L;
         try {
             current.recordSent(sequence, now);
-            long requestId = nextRequestId.getAsLong();
-            soakOperationIds.add(requestId);
+            requestId = nextRequestId.getAsLong();
+            clientPingOperationIds.add(requestId);
             String ping = encode(PING, current.runId(), sequence, now);
             bridge.broadcastBytes(requestId, ping.getBytes(StandardCharsets.UTF_8));
             if (sequence % 5L == 0L)
                 listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
         } catch (Throwable throwable) {
+            if (requestId >= 0L) clientPingOperationIds.remove(requestId);
             current.recordError();
             listener.onLog("SOAK tick error: " + message(throwable));
             listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
@@ -202,7 +223,10 @@ public final class ProbeSoakController implements AutoCloseable {
 
     private void recordMalformed(String reason, String payload) {
         ProbeSoakStats current = currentStats();
-        if (current != null) current.recordError();
+        if (current != null) {
+            current.recordInvalid();
+            listener.onProgress(current.snapshot(SystemClock.elapsedRealtimeNanos()));
+        }
         listener.onLog("SOAK malformed packet (" + reason + "): " + payload);
     }
 
@@ -223,7 +247,8 @@ public final class ProbeSoakController implements AutoCloseable {
             scheduled = null;
         }
         if (future != null) future.cancel(false);
-        soakOperationIds.clear();
+        clientPingOperationIds.clear();
+        hostPongOperationIds.clear();
         ProbeSoakStats.Snapshot snapshot = finished.snapshot(SystemClock.elapsedRealtimeNanos());
         listener.onProgress(snapshot);
         listener.onFinished(snapshot, reason);
@@ -231,6 +256,10 @@ public final class ProbeSoakController implements AutoCloseable {
 
     private static String encode(String type, String runId, long sequence, long sentNanos) {
         return PREFIX + "|" + type + "|" + runId + "|" + sequence + "|" + sentNanos;
+    }
+
+    private static String safe(String value) {
+        return value == null || value.isEmpty() ? "unknown" : value;
     }
 
     private static String message(Throwable throwable) {
