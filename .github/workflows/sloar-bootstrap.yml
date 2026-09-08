@@ -1,0 +1,67 @@
+name: Sloar one-shot bootstrap
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sloar-bootstrap.yml
+
+authorization:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout task branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Guard repository and base ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "hoonex/solarnet"
+          test "${{ github.head_ref }}" = "feat/bootstrap-solarnet"
+          git merge-base --is-ancestor cdc1875c7b67b397ebc9abc28d32c879f4202d56 HEAD
+
+      - name: Fetch pinned Sloar 0.9.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/hoonex/sloar-chat-coder.git "$RUNNER_TEMP/sloar"
+          git -C "$RUNNER_TEMP/sloar" checkout --detach a21d452ee03153c9b185da9949f8ea0a30638061
+          test "$(git -C "$RUNNER_TEMP/sloar" rev-parse HEAD)" = "a21d452ee03153c9b185da9949f8ea0a30638061"
+          test "$(cat "$RUNNER_TEMP/sloar/VERSION")" = "0.9.0"
+
+      - name: Install Sloar Chat Coder bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$RUNNER_TEMP/sloar/.agents/skills/sloar-chat-coder/scripts/install.py" --target "$GITHUB_WORKSPACE"
+          grep -q 'version: "0.9.0"' .agents/skills/sloar-chat-coder/SKILL.md
+          test -f .agents/skills/web-design-guidance/SKILL.md
+          test -f .agents/skills/apple-web-design/SKILL.md
+          grep -q '<!-- sloar-chat-coder:begin -->' AGENTS.md
+
+      - name: Remove one-shot mission
+        shell: bash
+        run: rm -f .github/workflows/sloar-bootstrap.yml
+
+      - name: Commit installed bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "No install changes produced"; exit 1; }
+          git commit -m "chore: install Sloar Chat Coder 0.9.0"
+          git push origin HEAD:feat/bootstrap-solarnet
