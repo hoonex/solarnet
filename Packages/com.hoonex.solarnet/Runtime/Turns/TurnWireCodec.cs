@@ -48,7 +48,7 @@ namespace SolarNet.Turns
             }
         }
 
-        public static SolarTurnCommit DecodeCommit(long committedTurnIndex, byte[] bytes)
+        public static SolarTurnCommit DecodeCommit(long committedTurnIndex, byte[] bytes, string stateHash = "")
         {
             using (var stream = new MemoryStream(bytes ?? Array.Empty<byte>(), false))
             using (var reader = new BinaryReader(stream, Encoding.UTF8))
@@ -60,7 +60,7 @@ namespace SolarNet.Turns
                 var nextTurnIndex = reader.ReadInt64();
                 var round = reader.ReadInt32();
                 EnsureEnd(stream);
-                return new SolarTurnCommit(actorId, committedTurnIndex, actionKind, payload, nextPlayerId, nextTurnIndex, round);
+                return new SolarTurnCommit(actorId, committedTurnIndex, actionKind, payload, nextPlayerId, nextTurnIndex, round, stateHash);
             }
         }
 

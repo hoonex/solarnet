@@ -6,17 +6,19 @@ The first target is a 2D mobile game where nearby devices can play together with
 
 ## Current milestone
 
-`0.2` adds the first real Android transport layer on top of the verified `0.1` turn core:
+`0.3` now has three layers working together:
 
 - host-authoritative turn ordering and duplicate/out-of-order protection;
-- deterministic game/session packet framing;
-- transport-independent peer identity;
-- Google Nearby advertiser/discoverer adapter for Unity Android;
+- Google Nearby advertiser/discoverer transport for Unity Android;
 - explicit human authentication-code confirmation before accepting a Nearby connection;
-- Nearby endpoint-ID -> SolarNet peer-ID handshake with collision protection;
-- BYTES payload transport with Google's size limit enforced;
-- Android permission guidance through Android 17 target-SDK behavior;
-- Android library compile CI plus platform-neutral Nearby E2E smoke tests.
+- Nearby endpoint-ID -> SolarNet peer-ID handshake;
+- optional deterministic `ISolarGameStateMachine` for game-rule validation;
+- SHA-256 state digests attached to authoritative commits;
+- bounded action journal for missed-turn replay;
+- automatic gap/digest mismatch detection;
+- authoritative snapshot fallback with pre/post-restore digest verification;
+- explicit reconnect `RequestResyncAsync()` API;
+- .NET protocol/E2E CI plus real Android/Play Services library compile CI.
 
 ## Repository layout
 
@@ -26,13 +28,16 @@ Packages/com.hoonex.solarnet/       Unity package / source of truth
   Runtime/Transport/                base transport abstraction + loopback
   Runtime/Nearby/                   platform-neutral Nearby transport logic
   Runtime/Android/                  Unity Android adapter
+  Runtime/State/                    reducer, digest, journal, snapshots/resync
   Runtime/Turns/                    authoritative turn state machine
   Runtime/Session/                  host/client session orchestration
   Plugins/Android/                  Google Nearby .androidlib bridge
 src/SolarNet.Core/                  .NET build wrapper for portable runtime source
-tests/SolarNet.Core.SmokeTests/     dependency-free executable tests
+tests/SolarNet.Core.SmokeTests/     multiplayer/transport tests
+tests/SolarNet.StateIntegrity.SmokeTests/ deterministic desync/recovery tests
 android-smoke/                      Gradle harness for real Android/Play Services compile
 docs/nearby-android.md              Android integration and permission contract
+docs/state-integrity.md             deterministic game-state contract
 docs/architecture.md                protocol and roadmap
 ```
 
@@ -40,15 +45,16 @@ docs/architecture.md                protocol and roadmap
 
 Add this repository as a Git package, or copy `Packages/com.hoonex.solarnet` into a Unity project. Portable networking is in `SolarNet.Runtime`; the Android bridge is in `SolarNet.Android`.
 
-For Nearby integration, read `docs/nearby-android.md`. The game owns permission UI, nearby-host selection, and the authentication confirmation screen; the engine owns transport framing, identity mapping, and turn delivery.
+For local Android multiplayer, read `docs/nearby-android.md`. For deterministic game state, replay, and reconnect recovery, read `docs/state-integrity.md`.
 
-## Transport roadmap
+## Transport / engine roadmap
 
 1. `LoopbackTransport` — implemented and tested.
 2. Android Google Nearby Connections — implemented; two-device radio verification pending.
-3. State integrity + reconnect journal.
-4. Bluetooth Classic/BLE transport experiments where platform constraints make sense.
-5. LAN transport.
-6. Optional relay/internet transport without changing game/session APIs.
+3. Deterministic state integrity / replay / snapshot resync — implemented and tested in-memory.
+4. Lobby/session UX + room lifecycle + compatibility negotiation.
+5. Bluetooth Classic/BLE transport experiments where platform constraints make sense.
+6. LAN transport.
+7. Optional relay/internet transport without changing game/session APIs.
 
-SolarNet intentionally does not put game rules inside the networking layer. A game submits an opaque action kind + payload; the host owns turn authority. The next engine milestone adds deterministic reducers, state digests, snapshots, and reconnect/resync.
+The next engine milestone is M4: a real room/lobby lifecycle around discovery, ready state, reconnect identity, and version compatibility rather than making each game assemble those pieces manually.
