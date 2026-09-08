@@ -30,6 +30,8 @@ jobs:
         run: dotnet run --project tests/SolarNet.StateIntegrity.SmokeTests/SolarNet.StateIntegrity.SmokeTests.csproj --configuration Release --nologo
       - name: Run replication acknowledgement tests
         run: dotnet run --project tests/SolarNet.ReplicationAck.SmokeTests/SolarNet.ReplicationAck.SmokeTests.csproj --configuration Release --nologo
+      - name: Run designated-replica durability barrier tests
+        run: dotnet run --project tests/SolarNet.DurabilityBarrier.SmokeTests/SolarNet.DurabilityBarrier.SmokeTests.csproj --configuration Release --nologo
       - name: Run deterministic chaos soak
         run: dotnet run --project tests/SolarNet.ChaosSoak.SmokeTests/SolarNet.ChaosSoak.SmokeTests.csproj --configuration Release --nologo
       - name: Run client process-resume tests
