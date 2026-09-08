@@ -1,8 +1,8 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "displayName": "SolarNet",
-  "description": "Local-first turn-based multiplayer engine with Nearby transport, deterministic resync, and room/lobby lifecycle.",
+  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic resync, and room/lobby lifecycle.",
   "unity": "6000.0",
   "author": {
     "name": "hoonex"
@@ -13,6 +13,8 @@
     "turn-based",
     "p2p",
     "nearby",
+    "bluetooth",
+    "rfcomm",
     "networking",
     "deterministic",
     "lobby"
