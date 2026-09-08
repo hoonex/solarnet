@@ -1,6 +1,6 @@
 # Grid Duel
 
-Grid Duel is a deliberately small playable 2D turn-game sample for SolarNet. It proves that game rules can live in a deterministic state machine while SolarNet owns room admission, turn authority, packet delivery, state hashes, and resync.
+Grid Duel is a deliberately small playable 2D turn-game sample for SolarNet. It proves that game rules can live in a deterministic state machine while SolarNet owns room admission, turn authority, packet delivery, state hashes, resync, and reconnect recovery.
 
 ## Rules
 
@@ -14,9 +14,7 @@ Grid Duel is a deliberately small playable 2D turn-game sample for SolarNet. It 
 
 ## Local demo
 
-Import **Grid Duel** from SolarNet's Package Manager Samples section. Create an empty GameObject and add `GridDuelLocalDemo`.
-
-The local demo creates two independent `SolarTurnSession` instances with independently-owned `GridDuelStateMachine` instances. Frames travel through `LoopbackTransport`, so the same authoritative turn/session path is exercised without two phones.
+Import **Grid Duel** from SolarNet's Package Manager Samples section. Create an empty GameObject and add `GridDuelLocalDemo`. The demo creates two independent `SolarTurnSession` instances over `LoopbackTransport`.
 
 ## Two-phone Android demo
 
@@ -24,14 +22,12 @@ Create an empty GameObject and add `GridDuelNetworkedDemo`, then build the same 
 
 ### Bluetooth Classic
 
-1. Pair the two phones first in Android Bluetooth settings.
+1. Pair the two phones in Android Bluetooth settings.
 2. On both phones select **Bluetooth Classic** and grant the requested permission.
 3. Start one phone as **Host** and the other as **Client**.
-4. On the client, refresh paired devices and connect to the host phone.
+4. The client refreshes paired devices and connects to the host.
 5. Both players toggle Ready; the host presses Start match.
-6. The board appears on both phones. Only the active player can move or attack.
-
-This path is explicitly Bluetooth-only and uses SolarNet's secure RFCOMM transport.
+6. Only the active player can move or attack.
 
 ### Nearby Connections
 
@@ -41,10 +37,10 @@ This path is explicitly Bluetooth-only and uses SolarNet's secure RFCOMM transpo
 4. Confirm the same Nearby verification digits on both phones and Accept.
 5. Both players toggle Ready; the host starts the match.
 
-Nearby chooses Bluetooth/BLE/Wi-Fi transports internally; SolarNet still exposes the same room and turn APIs.
+## Active-match reconnect
 
-## State integrity
+SolarNet keeps room identity and game state separate from the physical radio link. If the client loses the link but the app process stays alive, reconnect with the same peer identity. The room host restores the existing slot instead of creating a duplicate. The client then calls `SolarTurnSession.RequestResyncAsync()`; the host replays missing commits from its action journal, or sends an authoritative snapshot when replay is unavailable. After convergence, normal turn submission continues.
 
-`GridDuelStateMachine` is passed directly to `SolarTurnSession` on both phones. Every accepted move or attack produces a canonical snapshot and SHA-256 state digest. A mismatch uses SolarNet's existing journal/snapshot resync path instead of letting the two game boards silently diverge.
+The networked sample requests this resync automatically when a client reconnects to the host during an active match.
 
-The CI integration suite also exercises room join -> Ready -> Start -> Grid Duel gameplay over one shared `LoopbackTransport`, proving that room and game packets coexist on the same connection before physical-radio testing.
+CI forcibly unregisters the client `LoopbackTransport` mid-match, lets the host commit a turn while the client is absent, reconnects the same peer, replays the missing turn, verifies canonical state convergence, and then verifies that the reconnected client can submit the next attack.
