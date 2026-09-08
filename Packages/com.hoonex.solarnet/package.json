@@ -1,12 +1,12 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "displayName": "SolarNet",
-  "description": "Local-first turn-based multiplayer engine with deterministic recovery, process resume, host migration, and state-verified replication acknowledgements.",
+  "description": "Local-first turn-based multiplayer engine with deterministic recovery, host migration, state-verified replication, and designated-replica durability fencing.",
   "unity": "6000.0",
   "author": { "name": "hoonex" },
   "license": "MIT",
-  "keywords": ["multiplayer", "turn-based", "p2p", "nearby", "bluetooth", "rfcomm", "networking", "deterministic", "lobby", "reconnect", "resume", "host-migration", "replication"],
+  "keywords": ["multiplayer", "turn-based", "p2p", "nearby", "bluetooth", "rfcomm", "networking", "deterministic", "lobby", "reconnect", "resume", "host-migration", "replication", "durability"],
   "samples": [
     {
       "displayName": "SolarNet Diagnostics",
@@ -15,7 +15,7 @@
     },
     {
       "displayName": "Grid Duel",
-      "description": "Playable 5x5 two-player game with Nearby/Bluetooth modes, active-match reconnect, process resume, and synchronized link-loss authority migration.",
+      "description": "Playable 5x5 two-player game with Nearby/Bluetooth modes, active-match reconnect, process resume, synchronized authority migration, and designated-replica durability fencing.",
       "path": "Samples~/GridDuel"
     }
   ]
