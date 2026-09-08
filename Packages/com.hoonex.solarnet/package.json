@@ -1,8 +1,8 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "SolarNet",
-  "description": "Local-first multiplayer engine for turn-based games.",
+  "description": "Local-first multiplayer engine for turn-based games with Android Nearby transport support.",
   "unity": "6000.0",
   "author": {
     "name": "hoonex"

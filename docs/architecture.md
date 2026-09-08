@@ -30,9 +30,9 @@ A committed action advances exactly one turn. This makes duplicate delivery safe
 
 ## Packet boundary
 
-`SolarPacketCodec` owns framing. Transport implementations move opaque `byte[]` frames only. This keeps Bluetooth/Nearby/LAN implementations from leaking platform-specific objects into the game layer.
+`SolarPacketCodec` owns gameplay/session framing. Transport implementations move opaque `byte[]` frames only. This keeps Bluetooth/Nearby/LAN implementations from leaking platform-specific objects into the game layer.
 
-Current frame fields:
+Current game frame fields:
 
 - magic `SNET`;
 - protocol version;
@@ -45,6 +45,18 @@ Current frame fields:
 - payload.
 
 The payload is message-specific. The current turn protocol has action, committed-action, and rejection payloads.
+
+## Nearby identity boundary
+
+Google Nearby gives each connection an ephemeral endpoint ID. SolarNet does not treat that identifier as game identity.
+
+```text
+Nearby endpoint id -- authenticated connection --> SolarNet Nearby envelope
+                                                -> durable peer id
+                                                -> ISolarTransport SolarFrame
+```
+
+Every Nearby peer sends a `SNBY` HELLO after the physical connection is established. DATA envelopes also carry the sender's durable peer ID, so delivery can recover the mapping even when HELLO and game traffic are tightly adjacent. A single endpoint may not change peer identity, and a peer ID may not silently move to a second live endpoint.
 
 ## Game boundary
 
@@ -67,15 +79,17 @@ identity -> turn authority -> game-rule validation -> apply reducer
 - broadcast;
 - async frame delivery with the remote peer ID supplied out-of-band.
 
-`LoopbackTransportHub` is the executable reference behavior. Future transports must preserve the same sender identity semantics.
+`LoopbackTransportHub` is the executable reference behavior. `NearbyTransport` preserves the same contract while delegating platform discovery/radio work to `INearbyPeerAdapter`.
 
-## Next milestones
+Android uses a separate `SolarNet.Android` assembly and a Unity `.androidlib` bridge, keeping Unity/Java types out of `SolarNet.Runtime` and the deterministic .NET test surface.
 
-### M1 — Core (current)
+## Milestones
+
+### M1 — Core — complete
 Host-authoritative turns, packet codec, transport abstraction, loopback E2E tests.
 
-### M2 — Nearby Android
-Android Nearby Connections adapter, discovery, connection authentication UI, permission handling, disconnect/reconnect states, two-device sample.
+### M2 — Nearby Android — implementation complete, device verification pending
+Nearby discovery/advertising adapter, explicit authentication confirmation API, peer-ID handshake, permission model, Android library compile gate, disconnect mapping, and Nearby-backed E2E core smoke test. Two physical Android devices are still required to verify real radios and permission/UI behavior.
 
 ### M3 — State integrity
 Deterministic game reducer contract, state digests, snapshots, resync requests, reconnect catch-up, action journal.
