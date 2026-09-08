@@ -29,6 +29,9 @@ namespace SolarNet.Session
         private long _durableNextTurnIndex;
         private SolarTurnCommit _pendingDurabilityCommit;
         private TaskCompletionSource<bool> _pendingDurabilityCompletion;
+        private bool _durabilityRevalidationPending;
+        private long _durabilityRevalidationNextTurnIndex;
+        private string _durabilityRevalidationStateHash = string.Empty;
 
         public bool DurabilityBarrierEnabled { get { return !string.IsNullOrEmpty(_requiredReplicationPeerId); } }
         public string RequiredReplicationPeerId { get { return _requiredReplicationPeerId; } }
@@ -49,6 +52,15 @@ namespace SolarNet.Session
             {
                 if (!IsHost || !DurabilityBarrierEnabled) return false;
                 lock (_durabilityGate) return _pendingDurabilityCommit != null;
+            }
+        }
+
+        public bool DurabilityRevalidationPending
+        {
+            get
+            {
+                if (!IsHost || !DurabilityBarrierEnabled) return false;
+                lock (_durabilityGate) return _durabilityRevalidationPending;
             }
         }
 
@@ -79,7 +91,26 @@ namespace SolarNet.Session
         private bool HasPendingDurabilityCommit()
         {
             if (!DurabilityBarrierEnabled) return false;
-            lock (_durabilityGate) return _pendingDurabilityCommit != null;
+            lock (_durabilityGate) return _pendingDurabilityCommit != null || _durabilityRevalidationPending;
+        }
+
+        internal void RequireDurabilityRevalidation(long nextTurnIndex, string stateHash)
+        {
+            if (!IsHost) throw new InvalidOperationException("Only the authoritative host can require durability revalidation.");
+            if (!DurabilityBarrierEnabled) throw new InvalidOperationException("Durability revalidation requires a designated replica barrier.");
+            if (nextTurnIndex < 0) throw new ArgumentOutOfRangeException(nameof(nextTurnIndex));
+            if (string.IsNullOrWhiteSpace(stateHash)) throw new ArgumentException("State hash is required.", nameof(stateHash));
+
+            lock (_durabilityGate)
+            {
+                if (_pendingDurabilityCommit != null)
+                    throw new InvalidOperationException("Cannot begin resume revalidation while a durability commit is pending.");
+                if (nextTurnIndex != _durableNextTurnIndex)
+                    throw new InvalidOperationException("Resume revalidation frontier must match the persisted durable frontier.");
+                _durabilityRevalidationPending = true;
+                _durabilityRevalidationNextTurnIndex = nextTurnIndex;
+                _durabilityRevalidationStateHash = stateHash;
+            }
         }
 
         private Task BeginDurabilityBarrier(SolarTurnCommit commit)
@@ -109,6 +140,15 @@ namespace SolarNet.Session
             TaskCompletionSource<bool> completion = null;
             lock (_durabilityGate)
             {
+                if (_durabilityRevalidationPending &&
+                    acknowledgement.NextTurnIndex >= _durabilityRevalidationNextTurnIndex &&
+                    string.Equals(acknowledgement.StateHash, _durabilityRevalidationStateHash, StringComparison.Ordinal))
+                {
+                    _durabilityRevalidationPending = false;
+                    _durabilityRevalidationNextTurnIndex = 0;
+                    _durabilityRevalidationStateHash = string.Empty;
+                }
+
                 if (_pendingDurabilityCommit == null) return;
                 if (acknowledgement.NextTurnIndex < _pendingDurabilityCommit.NextTurnIndex) return;
 

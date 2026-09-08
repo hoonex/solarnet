@@ -1,14 +1,14 @@
-# Client process-death resume
+# Process-death resume
 
-SolarNet 0.10 verifies a client-side process restart while the authoritative host process remains alive.
+SolarNet has two distinct process-restart paths. They intentionally use different evidence because a non-authoritative client can recover from a live host, while an authoritative process must recover from a previously persisted durable checkpoint.
 
-## Required identity contract
+## Client process death while the host remains alive
 
 A reconnecting client must reuse the same logical SolarNet peer ID and the same room display name. The Grid Duel Unity sample stores its client peer ID in `PlayerPrefs`, so terminating and relaunching the client app does not create a new room identity.
 
 Do not derive the logical peer ID from a transient Nearby endpoint ID, Bluetooth MAC/connection handle, or a fresh GUID created on every launch.
 
-## Resume flow
+Client resume flow:
 
 1. The host keeps the existing `SolarRoomSession` and `SolarTurnSession` alive.
 2. The client process exits and its transport disconnects.
@@ -18,21 +18,20 @@ Do not derive the logical peer ID from a transient Nearby endpoint ID, Bluetooth
 6. The fresh client receives `GameStarted`, creates a new game-state machine and a new `SolarTurnSession`, then requests authoritative recovery from turn `0`.
 7. If the host journal still covers the range, commits are replayed. If not, the host sends an authoritative snapshot. The client must not accept local gameplay input until recovery converges.
 
-The Grid Duel sample detects a process-resume path when a fresh client joins directly into `Playing` without first observing `Lobby`; it then requests the full resync automatically.
+The Grid Duel sample detects this path when a fresh client joins directly into `Playing` without first observing `Lobby`; it then requests the full resync automatically.
 
-## CI evidence
+`SolarNet.ProcessResume.SmokeTests` deliberately uses a host journal capacity of `1`, advances Grid Duel, destroys the original client room/game/transport, then creates a fresh client process model with the same peer ID and empty game state. The resumed client must reclaim its slot, preserve the game session ID, recover by snapshot fallback, match the host digest, and continue play without duplicating roster identity.
 
-`SolarNet.ProcessResume.SmokeTests` deliberately configures the host journal to capacity `1`, advances Grid Duel to turn 3, destroys the original client room/game/transport, and creates a fresh client process model with the same peer ID and an empty `GridDuelStateMachine`.
+## Current authority process death
 
-The resumed client must:
+SolarNet 0.17 adds a separate path for the **currently authoritative peer**. The authority can persist a `SolarAuthorityEpochRecord` only at a designated-replica durable frontier, then reconstruct the same room/game authority after its process restarts.
 
-- reclaim the original room slot without duplicating the roster;
-- receive the original game session ID;
-- recover turn 3 through snapshot fallback because the old journal range is unavailable;
-- match the host state hash;
-- immediately submit its pending attack;
-- remain converged after the host's following turn.
+That record carries room/roster identity, game session ID, canonical state bytes/hash, turn metadata, and the required replica. Only the persisted authority peer ID can restore it.
 
-## Limitations
+Restore is not enough to resume new turns. A restarted authority with a required replica begins with `DurabilityRevalidationPending`. Local and remote actions are rejected with `ReplicationPending` until the same replica verifies the persisted frontier and exact state hash. This prevents a stale local record from immediately producing competing turns when another device may already have migrated the match to a newer authority epoch.
 
-This milestone covers **client process death with the host still alive**. It does not preserve an authoritative host across host process death. Host crash recovery or host migration requires durable authoritative state, ownership transfer rules, replay fencing, and conflict handling and is intentionally a separate milestone.
+See `docs/authority-epoch-persistence.md` for the complete durable-record and replica-revalidation contract.
+
+## Limits
+
+The two paths do **not** yet solve simultaneous process loss on all players. A non-authority process does not currently persist enough authoritative epoch history to discover and choose the newest epoch if every process dies. Physical Android process-kill/relaunch and Nearby/Bluetooth radio reconnection also remain unverified until multi-phone device testing is performed.

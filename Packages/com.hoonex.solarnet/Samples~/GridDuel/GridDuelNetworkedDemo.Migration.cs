@@ -47,6 +47,8 @@ namespace SolarNet.Samples.GridDuel
             game.StateMismatchDetected += mismatch => AddLog("State mismatch: " + mismatch.Reason + ". Automatic resync is active.");
             game.SnapshotApplied += snapshot => AddLog("State snapshot applied at turn " + snapshot.NextTurnIndex + ".");
             game.ResyncFailed += failure => AddLog("Resync failed: " + failure.Reason);
+            game.DurabilityAdvanced += OnDurabilityAdvancedForPersistence;
+            game.ReplicationAcknowledged += OnReplicationAcknowledgedForAuthorityResume;
             game.ProtocolFaulted += ex => AddLog("Game fault: " + ex.Message);
         }
 
@@ -198,6 +200,8 @@ namespace SolarNet.Samples.GridDuel
                 SubscribeGame(_game);
                 await _game.StartAsync();
                 _resumeFromProcessRestart = false;
+                if (_isHost) PersistCurrentAuthorityEpoch("authority migration");
+                else ClearPersistedAuthorityEpoch();
                 migrationReady = true;
 
                 if (_isHost)
