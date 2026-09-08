@@ -8,7 +8,7 @@ using SolarNet.Transport;
 
 namespace SolarNet.Room
 {
-    public sealed class SolarRoomSession
+    public sealed partial class SolarRoomSession
     {
         private readonly ISolarTransport _transport;
         private readonly SolarRoomOptions _options;
@@ -466,16 +466,16 @@ namespace SolarNet.Room
             var peers = new HashSet<string>(StringComparer.Ordinal);
             var slots = new HashSet<int>();
             var includesLocal = false;
-            var includesHostAtZero = false;
+            var includesHost = false;
             foreach (var player in snapshot.Players)
             {
                 if (!peers.Add(player.PeerId)) throw new InvalidDataException("Room snapshot contains duplicate peer IDs.");
                 if (!slots.Add(player.Slot)) throw new InvalidDataException("Room snapshot contains duplicate player slots.");
                 if (string.Equals(player.PeerId, LocalPeerId, StringComparison.Ordinal)) includesLocal = true;
-                if (player.Slot == 0 && string.Equals(player.PeerId, HostPeerId, StringComparison.Ordinal)) includesHostAtZero = true;
+                if (string.Equals(player.PeerId, HostPeerId, StringComparison.Ordinal)) includesHost = true;
             }
             if (!includesLocal) throw new InvalidDataException("Room snapshot does not include the local peer.");
-            if (!includesHostAtZero) throw new InvalidDataException("Room snapshot does not preserve host slot zero.");
+            if (!includesHost) throw new InvalidDataException("Room snapshot does not include its declared host.");
             if (snapshot.Phase == SolarRoomPhase.Playing && string.IsNullOrWhiteSpace(snapshot.GameSessionId))
                 throw new InvalidDataException("Playing room snapshot is missing a game session ID.");
         }
