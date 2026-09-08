@@ -97,6 +97,27 @@ namespace SolarNet.Turns
         public int Round { get; private set; } = 1;
         public string CurrentPlayerId { get { return _players[_activePlayerIndex]; } }
 
+        public static TurnCoordinator Restore(IList<string> players, long nextTurnIndex, string currentPlayerId, int round)
+        {
+            if (nextTurnIndex < 0) throw new ArgumentOutOfRangeException(nameof(nextTurnIndex));
+            if (string.IsNullOrWhiteSpace(currentPlayerId)) throw new ArgumentException("Current player ID is required.", nameof(currentPlayerId));
+            if (round < 1) throw new ArgumentOutOfRangeException(nameof(round));
+
+            var coordinator = new TurnCoordinator(players);
+            var expectedIndex = (int)(nextTurnIndex % coordinator._players.Length);
+            var expectedRoundLong = (nextTurnIndex / coordinator._players.Length) + 1;
+            if (expectedRoundLong > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(nextTurnIndex), "Turn index exceeds the supported round range.");
+            if (!string.Equals(coordinator._players[expectedIndex], currentPlayerId, StringComparison.Ordinal))
+                throw new ArgumentException("Current player does not match the supplied turn index and player order.", nameof(currentPlayerId));
+            if ((int)expectedRoundLong != round)
+                throw new ArgumentException("Round does not match the supplied turn index and player order.", nameof(round));
+
+            coordinator.TurnIndex = nextTurnIndex;
+            coordinator.Round = round;
+            coordinator._activePlayerIndex = expectedIndex;
+            return coordinator;
+        }
+
         public bool IsKnownPlayer(string peerId)
         {
             return !string.IsNullOrWhiteSpace(peerId) && _playerSet.Contains(peerId);
