@@ -43,6 +43,7 @@ public final class ProbeSoakStatsSmoke {
         equal(ProbeSoakStats.PongResult.SENT_TIMESTAMP_MISMATCH,
                 stats.recordPong("run-b", 7, 101L, 120L),
                 "timestamp mismatch");
+        stats.recordInvalid();
         equal(ProbeSoakStats.PongResult.ACCEPTED,
                 stats.recordPong("run-b", 7, 100L, 120L),
                 "accepted pong");
@@ -51,7 +52,7 @@ public final class ProbeSoakStatsSmoke {
                 "duplicate pong");
 
         ProbeSoakStats.Snapshot snapshot = stats.snapshot(200L);
-        equal(3L, snapshot.invalid, "invalid count");
+        equal(4L, snapshot.invalid, "invalid count");
         equal(1L, snapshot.duplicate, "duplicate count");
         truth(!snapshot.clean(), "invalid run not clean");
     }
