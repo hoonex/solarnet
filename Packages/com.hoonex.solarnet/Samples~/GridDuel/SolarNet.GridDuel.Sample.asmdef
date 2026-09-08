@@ -1,0 +1,16 @@
+{
+  "name": "SolarNet.GridDuel.Sample",
+  "rootNamespace": "SolarNet.Samples.GridDuel",
+  "references": [
+    "SolarNet.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/SolarNet.Core/SolarNet.Core.csproj" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Samples~/GridDuel/*.cs" />
+    <Compile Include="UnityEngineStubs.cs" />
+  </ItemGroup>
+</Project>
