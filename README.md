@@ -2,9 +2,9 @@
 
 SolarNet is a local-first multiplayer engine for turn-based games.
 
-The first target is a 2D mobile game where nearby devices can play together without a traditional game server. The engine separates physical transport, room/lobby lifecycle, authoritative turns, deterministic game-state recovery, replication proof, and host-migration safety.
+The first target is a 2D mobile game where nearby devices can play together without a traditional game server. The engine separates physical transport, room/lobby lifecycle, authoritative turns, deterministic game-state recovery, replication proof, durable authority persistence, and host-migration safety.
 
-## Current milestone — 0.16
+## Current milestone — 0.17
 
 - host-authoritative turn ordering and duplicate/out-of-order protection;
 - Google Nearby advertiser/discoverer transport for Unity Android;
@@ -14,42 +14,45 @@ The first target is a 2D mobile game where nearby devices can play together with
 - safety-first deterministic successor selection using stable room slot order;
 - migrated-room authority bootstrap plus Nearby/Bluetooth role switching;
 - Grid Duel synchronized link-loss migration with authority epoch rotation, room rejoin, and authoritative resync;
-- state-verified `ReplicationAck` packets after successful committed-action or snapshot application;
-- host-side per-peer replication frontiers through `GetReplicationFrontier` / `IsReplicatedThrough`;
-- designated-replica durability fencing with `DurableNextTurnIndex`, `DurabilityPending`, and `DurabilityAdvanced`;
-- pending-turn rejection with `ReplicationPending`, preventing dependent authoritative turns from building on an unreplicated predecessor;
+- state-verified `ReplicationAck` packets and host-side per-peer replication frontiers;
+- designated-replica durability fencing with `DurableNextTurnIndex`, `DurabilityPending`, `DurabilityAdvanced`, and `ReplicationPending`;
 - ACK-loss recovery through same-turn snapshot resync without holding the host gate;
-- Grid Duel initial and promoted authorities automatically designate the only other player as their durability replica;
-- bounded authoritative digest evidence, duplicate-ACK idempotency, and forged-digest rejection;
+- durable `SolarAuthorityEpochRecord` capture containing room authority, game epoch, stable roster order, canonical state, turn metadata, and designated replica;
+- deterministic `SNAE` authority-record encoding with SHA-256 corruption detection and bounded decode limits;
+- same-authority process restart through `SolarAuthorityEpochResume`;
+- post-restart `DurabilityRevalidationPending` fence: no local or remote turn is accepted until the designated replica re-verifies the persisted frontier/hash;
+- Grid Duel `PlayerPrefs` integration with saved-authority Resume/Discard UI, orderly stale-record cleanup, and transport-mode persistence;
 - Unity Diagnostics and playable Grid Duel samples;
-- deterministic 240-turn chaos soak plus recovery, resume, replication, durability, authority-promotion, migration, and Grid Duel migration CI gates;
+- deterministic 240-turn chaos soak plus recovery, resume, replication, durability, authority-epoch persistence, promotion, migration, and Grid Duel CI gates;
 - Nearby/Bluetooth Android libraries and transport Probe APK built in CI.
 
-## Replication, durability, and host migration
+## Replication, durability, persistence, and migration
 
-The migration path is intentionally evidence-driven:
+The authority path is evidence-driven:
 
 1. authoritative turns carry canonical state digests;
-2. a client applies the turn through its reducer and verifies the resulting digest;
+2. a client applies the turn and verifies the resulting digest;
 3. only then does it return `ReplicationAck(nextTurnIndex, stateHash)`;
-4. the host validates that acknowledgement against authoritative state and advances that peer's replication frontier;
-5. when a designated-replica barrier is enabled, the host will not accept another turn until that replica has proven the current state;
-6. synchronized peers can capture `SolarAuthorityCheckpoint` and derive a deterministic successor/new authority epoch;
-7. only the elected successor promotes itself and rebuilds the room/transport topology.
+4. the host validates that ACK and advances the peer's replication frontier;
+5. with a designated-replica barrier, the host refuses dependent turns until the required replica proves the current state;
+6. only a frontier where `DurableNextTurnIndex == KnownNextTurnIndex` can be captured as a durable authority epoch;
+7. a restarted authority restores that exact persisted room/game/state checkpoint;
+8. if a required replica exists, the restored authority remains fenced until that replica verifies the persisted frontier/hash again;
+9. synchronized peers may instead derive a deterministic successor and rotate to a new authority epoch when migration is required.
 
-A completed `SendAsync` is **not** remote durability evidence. The ACK is the explicit proof that the remote state machine accepted and reproduced the authoritative state. Snapshot recovery uses the same rule: ACK occurs only after snapshot digest verification, restore, and canonical rehash.
+A completed `SendAsync` is **not** remote durability evidence. The ACK is the explicit proof that a remote state machine reproduced the authoritative state. Snapshot recovery uses the same rule: ACK occurs only after snapshot digest verification, restore, and canonical rehash.
 
-SolarNet 0.16 separates the host's local authoritative frontier from its designated-replica durability frontier. `KnownNextTurnIndex` may be one turn ahead while replication proof is pending; `DurableNextTurnIndex` advances only after the required replica's verified ACK. `ActionCommitted` remains the existing local authoritative-commit signal, while `DurabilityAdvanced` is the explicit replication-safe signal. Host `SubmitActionAsync` waits for that proof when the barrier is enabled.
+`KnownNextTurnIndex` can temporarily be one turn ahead of `DurableNextTurnIndex` while proof is pending. `ActionCommitted` remains the local authoritative-commit signal; `DurabilityAdvanced` is the replication-safe signal. While a durability commit or post-restart revalidation fence is pending, another action is rejected with `ReplicationPending` without advancing the coordinator or mutating the reducer.
 
-While durability is pending, another action is rejected with `ReplicationPending` without advancing the coordinator or mutating the reducer. The host gate is not held during the proof wait, so an ACK that was lost can be recovered by `ResyncRequest -> Snapshot -> verified ReplicationAck`. SolarNet does not silently disable the fence on timeout; loss of the required replica intentionally sacrifices liveness rather than claiming false migration safety.
+A persisted authority record is **not** treated as a globally unique authority lease. After process restart, the old authority may be stale because another peer could already have migrated the match to a newer session. `DurabilityRevalidationPending` therefore blocks all new turns until the same designated replica ACKs the exact persisted frontier/hash. If that peer has already moved to a newer session, the stale epoch cannot obtain the required proof and stays fenced. SolarNet intentionally sacrifices liveness rather than claiming false authority safety.
 
-For two-player Grid Duel, the opponent is both the only non-host player and the deterministic successor, so it is automatically the designated replica. After migration, the former host becomes the promoted authority's designated replica. Larger games must align the designated replica with their own successor/quorum policy; this is not a general consensus protocol.
+For two-player Grid Duel, the other player is both the deterministic successor and the designated replica. After migration, the former host becomes the promoted authority's replica. Larger games must define their own successor/quorum policy; SolarNet 0.17 is not a general consensus protocol.
 
-Transient `IsConnected` values do not affect successor choice or authority epoch ID. Grid Duel also refuses automatic promotion if its canonical state no longer matches the last authoritative digest observed by the session.
+The authority record's SHA-256 detects accidental corruption but does not authenticate hostile local storage changes. Applications needing tamper resistance should add platform-backed authenticated storage or signatures.
 
-Nearby can rediscover the migrated room and request the elected successor endpoint. Bluetooth Classic retains the device address associated with the previously authenticated SolarNet peer, allowing automatic reconnect to the elected successor when that address is known. If no authenticated address exists, paired-device selection remains explicit; SolarNet does not guess peer identity.
+Nearby can rediscover a migrated room and Bluetooth Classic retains authenticated peer device-address hints. Physical process-kill/relaunch and radio recovery are still unverified until real multi-phone testing is performed.
 
-See `docs/replication-ack.md`, `docs/durability-barrier.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md`.
+See `docs/replication-ack.md`, `docs/durability-barrier.md`, `docs/authority-epoch-persistence.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md`.
 
 ## Repository layout
 
@@ -60,15 +63,15 @@ Packages/com.hoonex.solarnet/
   Runtime/Nearby/                   Nearby transport + room discovery/migration switching
   Runtime/BluetoothClassic/         Bluetooth-only RFCOMM transport + migration switching
   Runtime/Android/                  Unity Android C# adapters + permission helpers
-  Runtime/Room/                     room lifecycle + migration planning/bootstrap
+  Runtime/Room/                     room lifecycle + migration/persisted-authority bootstrap
   Runtime/State/                    reducer / digest / journal / snapshots
   Runtime/Turns/                    authoritative turn state + checkpoint restore
-  Runtime/Session/                  game orchestration + replication/durability + authority promotion
+  Runtime/Session/                  game orchestration + replication/durability + authority persistence/promotion
   Plugins/Android/                  Nearby + Bluetooth Classic .androidlib bridges
   Samples~/Diagnostics/             two-phone transport/room diagnostics
-  Samples~/GridDuel/                local + two-phone playable 2D sample + migration workflow
+  Samples~/GridDuel/                local + two-phone playable sample + migration/persistence workflow
 src/SolarNet.Core/                  .NET build wrapper
-tests/                              protocol, recovery, replication, durability, chaos, migration, room, game, Android gates
+tests/                              protocol, recovery, replication, durability, persistence, chaos, migration, room, game, Android gates
 android-smoke/                      Android library + probe APK build harness
 docs/                               architecture and integration contracts
 ```
@@ -88,6 +91,7 @@ docs/                               architecture and integration contracts
 11. Grid Duel synchronized link-loss authority migration — wired into the Unity sample and deterministic smoke tests.
 12. State-verified replication acknowledgements and per-peer proof frontiers — done.
 13. Designated-replica durable-turn fence with ACK-loss snapshot recovery — done and wired into Grid Duel.
-14. Next: persist migrated authority/durability epochs across process death, then perform physical multi-phone radio soak and release hardening.
+14. Persist current/migrated durable authority epochs across authority process death with post-restart replica revalidation — done in deterministic CI models and Unity compile surface.
+15. Next: persist follower-side epoch hints for simultaneous process loss, perform physical multi-phone process-kill/radio soak, then release hardening.
 
-Read `docs/replication-ack.md`, `docs/durability-barrier.md`, `docs/chaos-soak.md`, `docs/process-resume.md`, `docs/authority-checkpoint.md`, `docs/host-migration-planner.md`, `docs/migrated-room-transport-switch.md`, and `docs/gridduel-host-migration.md` for recovery contracts and limits.
+Read the documents above for exact recovery contracts, evidence boundaries, and known limitations.
