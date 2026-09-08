@@ -1,8 +1,8 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "displayName": "SolarNet",
-  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic recovery, reconnect/process resume, and authority-checkpoint support for promoted-host recovery.",
+  "description": "Local-first turn-based multiplayer engine with deterministic recovery, reconnect/process resume, authority checkpoints, and deterministic host-migration planning for Nearby/Bluetooth transports.",
   "unity": "6000.0",
   "author": { "name": "hoonex" },
   "license": "MIT",

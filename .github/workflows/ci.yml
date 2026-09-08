@@ -34,6 +34,8 @@ jobs:
         run: dotnet run --project tests/SolarNet.ProcessResume.SmokeTests/SolarNet.ProcessResume.SmokeTests.csproj --configuration Release --nologo
       - name: Run authority-checkpoint promotion tests
         run: dotnet run --project tests/SolarNet.AuthorityCheckpoint.SmokeTests/SolarNet.AuthorityCheckpoint.SmokeTests.csproj --configuration Release --nologo
+      - name: Run host-migration planner tests
+        run: dotnet run --project tests/SolarNet.HostMigrationPlanner.SmokeTests/SolarNet.HostMigrationPlanner.SmokeTests.csproj --configuration Release --nologo
       - name: Run room-lifecycle smoke tests
         run: dotnet run --project tests/SolarNet.Room.SmokeTests/SolarNet.Room.SmokeTests.csproj --configuration Release --nologo
       - name: Run Bluetooth Classic smoke tests
