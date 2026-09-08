@@ -11,7 +11,8 @@ namespace SolarNet.Turns
         TurnIndexMismatch = 3,
         DuplicateOrOutOfOrderSequence = 4,
         InvalidAction = 5,
-        ProtocolViolation = 6
+        ProtocolViolation = 6,
+        GameRuleRejected = 7
     }
 
     public sealed class SolarTurnAction
@@ -34,7 +35,15 @@ namespace SolarNet.Turns
 
     public sealed class SolarTurnCommit
     {
-        public SolarTurnCommit(string actorId, long committedTurnIndex, string actionKind, byte[] payload, string nextPlayerId, long nextTurnIndex, int round)
+        public SolarTurnCommit(
+            string actorId,
+            long committedTurnIndex,
+            string actionKind,
+            byte[] payload,
+            string nextPlayerId,
+            long nextTurnIndex,
+            int round,
+            string stateHash = "")
         {
             ActorId = actorId;
             CommittedTurnIndex = committedTurnIndex;
@@ -43,6 +52,7 @@ namespace SolarNet.Turns
             NextPlayerId = nextPlayerId;
             NextTurnIndex = nextTurnIndex;
             Round = round;
+            StateHash = stateHash ?? string.Empty;
         }
 
         public string ActorId { get; private set; }
@@ -52,6 +62,12 @@ namespace SolarNet.Turns
         public string NextPlayerId { get; private set; }
         public long NextTurnIndex { get; private set; }
         public int Round { get; private set; }
+        public string StateHash { get; private set; }
+
+        public SolarTurnCommit WithStateHash(string stateHash)
+        {
+            return new SolarTurnCommit(ActorId, CommittedTurnIndex, ActionKind, Payload, NextPlayerId, NextTurnIndex, Round, stateHash);
+        }
     }
 
     public sealed class TurnCoordinator
@@ -81,11 +97,31 @@ namespace SolarNet.Turns
         public int Round { get; private set; } = 1;
         public string CurrentPlayerId { get { return _players[_activePlayerIndex]; } }
 
+        public bool IsKnownPlayer(string peerId)
+        {
+            return !string.IsNullOrWhiteSpace(peerId) && _playerSet.Contains(peerId);
+        }
+
         public bool TryCommit(SolarTurnAction action, out SolarTurnCommit commit, out SolarTurnRejectReason reason)
+        {
+            return TryCommit(action, null, out commit, out reason);
+        }
+
+        public bool TryCommit(
+            SolarTurnAction action,
+            Func<SolarTurnAction, bool> gameRuleValidator,
+            out SolarTurnCommit commit,
+            out SolarTurnRejectReason reason)
         {
             commit = null;
             reason = Validate(action);
             if (reason != SolarTurnRejectReason.None) return false;
+
+            if (gameRuleValidator != null && !gameRuleValidator(action))
+            {
+                reason = SolarTurnRejectReason.GameRuleRejected;
+                return false;
+            }
 
             var committedTurnIndex = TurnIndex;
             _lastAcceptedSequence[action.ActorId] = action.Sequence;

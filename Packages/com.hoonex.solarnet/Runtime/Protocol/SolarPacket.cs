@@ -10,7 +10,8 @@ namespace SolarNet.Protocol
         TurnRejected = 4,
         StateDigest = 5,
         Snapshot = 6,
-        ResyncRequest = 7
+        ResyncRequest = 7,
+        ResyncUnavailable = 8
     }
 
     public sealed class SolarPacket

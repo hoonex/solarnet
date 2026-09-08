@@ -14,5 +14,6 @@
     <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Turns/**/*.cs" />
     <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Session/**/*.cs" />
     <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Nearby/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/State/**/*.cs" />
   </ItemGroup>
 </Project>
