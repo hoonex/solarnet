@@ -22,7 +22,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Verify exact mission base
-        run: test "$(git rev-parse HEAD)" = "837b6a3c9fe0ffa889b384dcdb35c154a1470d5d"
+        run: test "$(git rev-parse HEAD^)" = "7af652afb9a023669faa299a1f8ff0fd681acfb2"
       - name: Wire Grid Duel persistence lifecycle
         shell: python
         run: |
