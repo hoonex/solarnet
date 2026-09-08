@@ -68,7 +68,7 @@ internal static class Program
             var before = hostState.CaptureSnapshot();
             await host.SubmitActionAsync(GridDuelActionCodec.MoveAction, GridDuelActionCodec.EncodeMove(2, 2)).ConfigureAwait(false);
             True(rejection != null, "invalid move should be rejected");
-            Equal(SolarTurnRejectReason.InvalidAction, rejection.Reason, "invalid action rejection reason");
+            Equal(SolarTurnRejectReason.GameRuleRejected, rejection.Reason, "invalid game-rule rejection reason");
             Equal(0L, host.KnownNextTurnIndex, "invalid action does not advance turn");
             BytesEqual(before, hostState.CaptureSnapshot(), "invalid action leaves host state unchanged");
             BytesEqual(before, clientState.CaptureSnapshot(), "invalid action leaves client state unchanged");
