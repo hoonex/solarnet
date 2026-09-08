@@ -22,3 +22,20 @@ jobs:
         run: dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
       - name: Run smoke tests
         run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
+
+  android-nearby:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Ensure Android 36 SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Compile Nearby Android library
+        run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace

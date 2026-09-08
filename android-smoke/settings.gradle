@@ -1,0 +1,11 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'solarnet-android-smoke'
+include ':solarnet-nearby'
+project(':solarnet-nearby').projectDir = file('../Packages/com.hoonex.solarnet/Plugins/Android/SolarNetNearby.androidlib')

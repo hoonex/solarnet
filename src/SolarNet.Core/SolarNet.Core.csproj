@@ -9,6 +9,10 @@
     <RootNamespace>SolarNet</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Protocol/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Transport/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Turns/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Session/**/*.cs" />
+    <Compile Include="../../Packages/com.hoonex.solarnet/Runtime/Nearby/**/*.cs" />
   </ItemGroup>
 </Project>
