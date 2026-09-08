@@ -69,10 +69,12 @@ If any required runtime permission is denied, advertising/discovery should be tr
 
 The `.androidlib` pins `com.google.android.gms:play-services-nearby:19.4.0`, the latest version confirmed by Google's Play services release notes when SolarNet 0.2 was implemented. The Java bridge uses `ConnectionsClient`, `Payload.Type.BYTES`, and the human-verifiable authentication digits API.
 
+`play-services-nearby:19.4.0` declares Android API 24 as its minimum supported SDK. SolarNet therefore clamps the Nearby Android library's `minSdk` to at least 24 even when a Unity project supplies a lower `unity.minSdkVersion`. An application that enables the Nearby transport must use Android API 24 or newer; the build should fail rather than override the dependency manifest and risk runtime calls on unsupported API 23 devices. This floor applies to the Nearby Android transport, not to transport-independent SolarNet core code.
+
 SolarNet packets are intentionally small. The transport enforces Google's `ConnectionsClient.MAX_BYTES_DATA_SIZE` limit (1,047,552 bytes) before sending a BYTES envelope.
 
 ## Verification scope
 
-CI compiles the exact `.androidlib` Java source against Android 36 using Unity 6.0's documented Gradle/AGP compatibility line and resolves the real Google Nearby dependency. Core smoke tests run the same `NearbyTransport` logic against a fake platform adapter with endpoint IDs intentionally different from SolarNet peer IDs.
+CI compiles the exact `.androidlib` Java source against Android 36 using Unity 6.0's documented Gradle/AGP compatibility line and resolves the real Google Nearby dependency. The Probe APK consumes the Nearby module at minSdk 24, so dependency metadata and manifest merging are also exercised by an Android application build. Core smoke tests run the same `NearbyTransport` logic against a fake platform adapter with endpoint IDs intentionally different from SolarNet peer IDs.
 
 CI does **not** prove radio behavior, permission prompts, OEM-specific Bluetooth/Wi-Fi behavior, real-device UI, thermal behavior, or reconnect behavior. A two-phone Android run remains required before calling M2 device-verified.
