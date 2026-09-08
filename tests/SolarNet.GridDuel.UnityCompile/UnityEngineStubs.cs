@@ -29,4 +29,11 @@ namespace UnityEngine
         public static GUILayoutOption Width(float value) { return new GUILayoutOption(); }
         public static GUILayoutOption Height(float value) { return new GUILayoutOption(); }
     }
+
+    public static class PlayerPrefs
+    {
+        public static string GetString(string key, string defaultValue) { return defaultValue; }
+        public static void SetString(string key, string value) { }
+        public static void Save() { }
+    }
 }

@@ -1,12 +1,12 @@
 {
   "name": "com.hoonex.solarnet",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "displayName": "SolarNet",
-  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic resync, room/lobby lifecycle, active-match reconnect recovery, diagnostics, and a networked 2D sample.",
+  "description": "Local-first turn-based multiplayer engine with Nearby and Bluetooth Classic transports, deterministic recovery, room/lobby lifecycle, active-match reconnect and client process-resume support, diagnostics, and a networked 2D sample.",
   "unity": "6000.0",
   "author": { "name": "hoonex" },
   "license": "MIT",
-  "keywords": ["multiplayer", "turn-based", "p2p", "nearby", "bluetooth", "rfcomm", "networking", "deterministic", "lobby", "reconnect"],
+  "keywords": ["multiplayer", "turn-based", "p2p", "nearby", "bluetooth", "rfcomm", "networking", "deterministic", "lobby", "reconnect", "resume"],
   "samples": [
     {
       "displayName": "SolarNet Diagnostics",
@@ -15,7 +15,7 @@
     },
     {
       "displayName": "Grid Duel",
-      "description": "Playable 5x5 two-player game with local loopback and two-phone Nearby/Bluetooth Classic modes, including active-match reconnect recovery.",
+      "description": "Playable 5x5 two-player game with local loopback and two-phone Nearby/Bluetooth Classic modes, active-match reconnect, and client process-resume recovery.",
       "path": "Samples~/GridDuel"
     }
   ]
