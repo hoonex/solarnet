@@ -67,6 +67,13 @@ jobs:
           gradle-version: '8.13'
       - name: Ensure Android 36 SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Run probe soak statistics smoke test
+        run: |
+          rm -rf /tmp/solarnet-probe-stats && mkdir -p /tmp/solarnet-probe-stats
+          javac -d /tmp/solarnet-probe-stats \
+            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeSoakStats.java \
+            android-smoke/probe-tests/ProbeSoakStatsSmoke.java
+          java -cp /tmp/solarnet-probe-stats com.hoonex.solarnet.probe.ProbeSoakStatsSmoke
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
