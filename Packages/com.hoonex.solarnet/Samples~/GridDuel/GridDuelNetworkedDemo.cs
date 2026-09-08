@@ -584,12 +584,17 @@ namespace SolarNet.Samples.GridDuel
                 _playerAId = info.PlayerIds[0];
                 _playerBId = info.PlayerIds[1];
                 _gameState = new GridDuelStateMachine(_playerAId, _playerBId);
+                var requiredReplica = _isHost
+                    ? (string.Equals(_playerAId, _localPeerId, StringComparison.Ordinal) ? _playerBId : _playerAId)
+                    : null;
                 _game = new SolarTurnSession(
                     info.GameSessionId,
                     info.HostPeerId,
                     _transport,
                     _isHost ? info.CreateHostTurnCoordinator() : null,
-                    _gameState);
+                    _gameState,
+                    256,
+                    requiredReplica);
                 SubscribeGame(_game);
                 await _game.StartAsync();
 

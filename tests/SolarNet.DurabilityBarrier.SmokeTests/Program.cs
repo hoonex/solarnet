@@ -69,7 +69,7 @@ internal static class Program
             True(!submit.IsCompleted, "host submit stays incomplete before designated ACK");
             Equal(1L, host.KnownNextTurnIndex, "provisional authoritative frontier");
             Equal(0L, host.DurableNextTurnIndex, "durable frontier before ACK");
-            Equal(0, committed, "host commit callback before ACK");
+            Equal(1, committed, "local authoritative commit callback occurs before durability ACK");
             Equal(5, state.Value, "host reducer already contains provisional state");
 
             await SendAckAsync(replica, "durable-basic", 1, host.LastStateHash, 0).ConfigureAwait(false);
@@ -81,7 +81,7 @@ internal static class Program
             Equal(host.LastStateHash, advanced.StateHash, "durable digest");
             Equal(1L, host.DurableNextTurnIndex, "durable frontier after ACK");
             True(!host.DurabilityPending, "barrier clears after ACK");
-            Equal(1, committed, "host publishes commit exactly once after ACK");
+            Equal(1, committed, "durability ACK does not duplicate the local commit callback");
         }
         finally
         {

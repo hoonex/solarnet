@@ -119,10 +119,9 @@ namespace SolarNet.Session
                 _pendingDurabilityCompletion = null;
             }
 
-            // The proof is durable before user callbacks run. Continuations are asynchronous,
-            // so the submitting host task cannot re-enter the turn gate from this callback stack.
+            // Replication proof is recorded before the waiting submit task resumes.
+            // ActionCommitted remains the local authoritative-commit signal; DurabilityAdvanced is the replication-safe signal.
             if (completion != null) completion.TrySetResult(true);
-            RaiseCommitted(durableCommit);
 
             var handler = DurabilityAdvanced;
             if (handler != null)

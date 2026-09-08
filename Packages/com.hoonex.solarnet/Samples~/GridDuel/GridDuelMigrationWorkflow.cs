@@ -106,7 +106,8 @@ namespace SolarNet.Samples.GridDuel
                     transport,
                     migration.Checkpoint,
                     gameState,
-                    journalCapacity);
+                    journalCapacity,
+                    migration.SourceRoom.HostPeerId);
             }
 
             return new SolarTurnSession(

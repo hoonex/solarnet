@@ -107,7 +107,8 @@ namespace SolarNet.Session
             ISolarTransport transport,
             SolarAuthorityCheckpoint checkpoint,
             ISolarGameStateMachine gameStateMachine,
-            int journalCapacity = 256)
+            int journalCapacity = 256,
+            string requiredReplicationPeerId = null)
         {
             if (string.IsNullOrWhiteSpace(newSessionId)) throw new ArgumentException("New session ID is required.", nameof(newSessionId));
             if (string.IsNullOrWhiteSpace(newHostPeerId)) throw new ArgumentException("New host peer ID is required.", nameof(newHostPeerId));
@@ -143,7 +144,8 @@ namespace SolarNet.Session
                 transport,
                 coordinator,
                 gameStateMachine,
-                journalCapacity);
+                journalCapacity,
+                requiredReplicationPeerId);
         }
     }
 }
