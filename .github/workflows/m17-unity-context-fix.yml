@@ -1,0 +1,56 @@
+name: M17 Unity Context Fix
+
+on:
+  push:
+    branches:
+      - feat/gridduel-auto-host-migration
+    paths:
+      - .github/workflows/m17-unity-context-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify exact mission base
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "dfb6b3d2b6973126c2b6ccc906b8f7f37642fa4c"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/m17-unity-context-fix.yml"
+      - name: Keep Unity continuations on main context
+        run: |
+          set -euo pipefail
+          target='Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs'
+          before=$(grep -o '\.ConfigureAwait(false)' "$target" | wc -l)
+          test "$before" -gt 0
+          sed -i 's/\.ConfigureAwait(false)//g' "$target"
+          ! grep -q '\.ConfigureAwait(false)' "$target"
+      - name: Verify targeted surface
+        run: |
+          set -euo pipefail
+          dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
+          dotnet build tests/SolarNet.GridDuel.UnityCompile/SolarNet.GridDuel.UnityCompile.csproj --configuration Release --nologo
+          dotnet run --project tests/SolarNet.GridDuelMigration.SmokeTests/SolarNet.GridDuelMigration.SmokeTests.csproj --configuration Release --nologo
+          dotnet run --project tests/SolarNet.GridDuel.SmokeTests/SolarNet.GridDuel.SmokeTests.csproj --configuration Release --nologo
+      - name: Publish bounded fix
+        run: |
+          set -euo pipefail
+          rm .github/workflows/m17-unity-context-fix.yml
+          git add -A
+          changed=$(git diff --cached --name-only)
+          test "$changed" = 'Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs
+.github/workflows/m17-unity-context-fix.yml' || test "$changed" = '.github/workflows/m17-unity-context-fix.yml
+Packages/com.hoonex.solarnet/Samples~/GridDuel/GridDuelNetworkedDemo.Migration.cs'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Keep Grid Duel migration on Unity context'
+          git push origin HEAD:feat/gridduel-auto-host-migration
