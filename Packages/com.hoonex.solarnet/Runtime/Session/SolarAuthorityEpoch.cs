@@ -138,10 +138,6 @@ namespace SolarNet.Session
                     throw new InvalidOperationException("Cannot persist a provisional authority turn while durability proof is pending.");
                 if (authoritativeSession.DurableNextTurnIndex != authoritativeSession.KnownNextTurnIndex)
                     throw new InvalidOperationException("Cannot persist authority state beyond the designated-replica durability frontier.");
-                if (!authoritativeSession.IsReplicatedThrough(
-                    authoritativeSession.RequiredReplicationPeerId,
-                    authoritativeSession.KnownNextTurnIndex))
-                    throw new InvalidOperationException("Required replica has not proven the authority state being persisted.");
             }
 
             var players = (SolarRoomPlayer[])roomSnapshot.Players.Clone();
