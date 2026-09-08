@@ -67,14 +67,14 @@ namespace SolarNet.Samples.GridDuel
                 if (!IsExpectedMigratedAuthority(peerId))
                 {
                     AddLog("Rejected migrated link from unexpected authority peer: " + peerId);
-                    await DisconnectUnexpectedMigrationPeerAsync(peerId).ConfigureAwait(false);
+                    await DisconnectUnexpectedMigrationPeerAsync(peerId);
                     return;
                 }
 
-                if (_room != null) await _room.NotifyPeerConnectedAsync(peerId).ConfigureAwait(false);
+                if (_room != null) await _room.NotifyPeerConnectedAsync(peerId);
                 if (_game != null && !_game.IsHost && string.Equals(peerId, _game.HostPeerId, StringComparison.Ordinal))
                 {
-                    await _game.RequestResyncAsync().ConfigureAwait(false);
+                    await _game.RequestResyncAsync();
                     AddLog(_migrationContext == null
                         ? "Requested game-state resync after live-link reconnect."
                         : "Requested authoritative state resync from migrated host " + _game.HostPeerId + ".");
@@ -92,7 +92,7 @@ namespace SolarNet.Samples.GridDuel
             AddLog(_status);
             try
             {
-                if (_room != null) await _room.NotifyPeerDisconnectedAsync(peerId).ConfigureAwait(false);
+                if (_room != null) await _room.NotifyPeerDisconnectedAsync(peerId);
             }
             catch (Exception ex)
             {
@@ -148,9 +148,9 @@ namespace SolarNet.Samples.GridDuel
             var migrationReady = false;
             try
             {
-                await sourceRoomSession.NotifyPeerDisconnectedAsync(peerId).ConfigureAwait(false);
+                await sourceRoomSession.NotifyPeerDisconnectedAsync(peerId);
                 sourceRoomSession.Detach();
-                await sourceGame.StopAsync().ConfigureAwait(false);
+                await sourceGame.StopAsync();
                 _game = null;
 
                 _nearbyEndpoints.Clear();
@@ -167,7 +167,7 @@ namespace SolarNet.Samples.GridDuel
                         sourceRoom,
                         migration.Plan,
                         NearbyServiceId,
-                        configureTransport: SubscribeNearbyTransport).ConfigureAwait(false);
+                        configureTransport: SubscribeNearbyTransport);
                     _nearbyTransport = _nearbyMigrationSwitch.Transport;
                     _bluetoothTransport = null;
                     _transport = _nearbyTransport;
@@ -182,7 +182,7 @@ namespace SolarNet.Samples.GridDuel
                         sourceRoom,
                         migration.Plan,
                         successorDeviceAddress: string.IsNullOrWhiteSpace(successorAddress) ? null : successorAddress,
-                        configureTransport: SubscribeBluetoothTransport).ConfigureAwait(false);
+                        configureTransport: SubscribeBluetoothTransport);
                     _bluetoothTransport = _bluetoothMigrationSwitch.Transport;
                     _nearbyTransport = null;
                     _transport = _bluetoothTransport;
@@ -196,7 +196,7 @@ namespace SolarNet.Samples.GridDuel
 
                 _game = GridDuelMigrationWorkflow.CreateGame(migration, roomBootstrap, _transport, _gameState);
                 SubscribeGame(_game);
-                await _game.StartAsync().ConfigureAwait(false);
+                await _game.StartAsync();
                 _resumeFromProcessRestart = false;
                 migrationReady = true;
 
@@ -230,7 +230,7 @@ namespace SolarNet.Samples.GridDuel
                 var deferred = _deferredMigrationPeers.ToArray();
                 _deferredMigrationPeers.Clear();
                 for (var i = 0; i < deferred.Length; i++)
-                    await HandlePeerConnectedAsync(deferred[i]).ConfigureAwait(false);
+                    await HandlePeerConnectedAsync(deferred[i]);
 
                 if (_transportMode == TransportMode.Nearby)
                     TryConnectMigratedNearbyEndpoint();
@@ -273,7 +273,7 @@ namespace SolarNet.Samples.GridDuel
                 _migrationNearbyRequestedEndpointId = endpoint.EndpointId;
                 try
                 {
-                    await _nearbyMigrationSwitch.RequestSuccessorConnectionAsync(endpoint).ConfigureAwait(false);
+                    await _nearbyMigrationSwitch.RequestSuccessorConnectionAsync(endpoint);
                     AddLog("Requested migrated Nearby authority endpoint: " + endpoint.EndpointId + ". Verify the digits on both phones.");
                 }
                 catch (Exception ex)
@@ -297,9 +297,9 @@ namespace SolarNet.Samples.GridDuel
             try
             {
                 if (_nearbyTransport != null)
-                    await _nearbyTransport.DisconnectPeerAsync(peerId).ConfigureAwait(false);
+                    await _nearbyTransport.DisconnectPeerAsync(peerId);
                 else if (_bluetoothTransport != null)
-                    await _bluetoothTransport.DisconnectPeerAsync(peerId).ConfigureAwait(false);
+                    await _bluetoothTransport.DisconnectPeerAsync(peerId);
             }
             catch (Exception ex)
             {
