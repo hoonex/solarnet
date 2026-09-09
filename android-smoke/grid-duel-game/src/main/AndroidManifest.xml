@@ -18,6 +18,10 @@
         android:label="Solar Arcade"
         android:theme="@style/GridDuelTheme">
         <activity
+            android:name=".RelaySiegeActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
             android:name=".PulseHockeyActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
