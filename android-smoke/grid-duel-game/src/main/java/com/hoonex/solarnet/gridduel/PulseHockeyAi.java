@@ -60,8 +60,9 @@ public final class PulseHockeyAi {
                 worstResponse = Math.min(worstResponse, responseValue);
             }
 
-            // Immediate quality still matters, but a move with an obvious tactical refutation loses value.
-            float minimaxValue = option.firstScore * 0.66f + worstResponse * 0.34f;
+            // The AI respects a tactical reply, but immediate initiative is deliberately weighted higher
+            // so both agents do not converge on endlessly safe defensive stances.
+            float minimaxValue = option.firstScore * 0.76f + worstResponse * 0.24f;
             if (minimaxValue > bestValue) {
                 bestValue = minimaxValue;
                 bestAction = option.action;
@@ -105,12 +106,19 @@ public final class PulseHockeyAi {
             result.add(PulseHockeyGame.Action.power(-2.25f, attackDirection * 6.2f, 1f));
         }
 
-        float defensiveX = clamp(puckX, -3.55f, 3.55f);
-        result.add(PulseHockeyGame.Action.guard(defensiveX));
-        if (!compact) result.add(PulseHockeyGame.Action.guard(0f));
-        if (game.canUse(player, PulseHockeyGame.Tactic.COUNTER)) {
-            result.add(PulseHockeyGame.Action.counter(defensiveX));
-            if (!compact) result.add(PulseHockeyGame.Action.counter(0f));
+        // Defense is situational rather than a default safe move. Once Overdrive reaches level 2,
+        // the AI must attack so two identical agents cannot indefinitely mirror Guard/Counter.
+        boolean puckDeepInOwnHalf = attackDirection * puckZ < -2.15f;
+        boolean energyStarved = game.getEnergy(player) <= 1;
+        boolean allowDefense = game.getOverdriveLevel() < 2 && (puckDeepInOwnHalf || energyStarved);
+        if (allowDefense) {
+            float defensiveX = clamp(puckX, -3.55f, 3.55f);
+            result.add(PulseHockeyGame.Action.guard(defensiveX));
+            if (!compact && puckDeepInOwnHalf) result.add(PulseHockeyGame.Action.guard(0f));
+            if (game.canUse(player, PulseHockeyGame.Tactic.COUNTER)) {
+                result.add(PulseHockeyGame.Action.counter(defensiveX));
+                if (!compact && puckDeepInOwnHalf) result.add(PulseHockeyGame.Action.counter(0f));
+            }
         }
         return result;
     }
@@ -125,27 +133,27 @@ public final class PulseHockeyAi {
 
         float direction = perspective == PulseHockeyGame.Player.SUN ? 1f : -1f;
         float value = scoreDifference * 5_500f;
-        value += direction * game.getPuckZ() * 58f;
-        value -= Math.abs(game.getPuckX()) * 2.5f;
-        value += (game.getEnergy(perspective) - game.getEnergy(opponent)) * 18f;
+        value += direction * game.getPuckZ() * 66f;
+        value -= Math.abs(game.getPuckX()) * 2.0f;
+        value += (game.getEnergy(perspective) - game.getEnergy(opponent)) * 11f;
+        value -= game.getNoGoalTurns() * 8.5f;
 
-        // Reward a defender that is actually between puck and goal, not merely sitting at center.
+        // Reward a defender that is actually between puck and goal, but only while there is real danger.
         float ownGoalZ = perspective == PulseHockeyGame.Player.SUN ? -PulseHockeyGame.HALF_LENGTH : PulseHockeyGame.HALF_LENGTH;
         float ownMalletZ = game.getMalletZ(perspective);
         float ownMalletX = game.getMalletX(perspective);
         float puckGoalDistance = Math.abs(game.getPuckZ() - ownGoalZ);
-        if (puckGoalDistance < 5.0f) {
-            value -= Math.abs(game.getPuckX() - ownMalletX) * 16f;
-            value -= Math.abs(ownMalletZ - ownGoalZ) * 8f;
+        if (puckGoalDistance < 4.2f) {
+            value -= Math.abs(game.getPuckX() - ownMalletX) * 12f;
+            value -= Math.abs(ownMalletZ - ownGoalZ) * 5f;
         }
 
         PulseHockeyGame.Stance stance = game.getStance(perspective);
-        if (stance == PulseHockeyGame.Stance.GUARD) value += 32f;
-        else if (stance == PulseHockeyGame.Stance.COUNTER) value += 25f;
+        if (stance == PulseHockeyGame.Stance.GUARD) value += 8f;
+        else if (stance == PulseHockeyGame.Stance.COUNTER) value += 6f;
 
-        // Pressure is intentionally slightly valuable to the side already pushing forward:
-        // Overdrive opens the arena and prevents defensive loops.
-        value += game.getOverdriveLevel() * direction * game.getPuckZ() * 2.4f;
+        // Pressure increasingly rewards keeping the puck in the opponent half as Overdrive opens the arena.
+        value += game.getOverdriveLevel() * direction * game.getPuckZ() * 3.6f;
         return value;
     }
 
