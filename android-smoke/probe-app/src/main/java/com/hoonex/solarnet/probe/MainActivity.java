@@ -65,11 +65,17 @@ public final class MainActivity extends Activity {
     private boolean hostMode;
     private ProbeEvidenceSnapshot bluetoothStartEvidence;
     private ProbeEvidenceSnapshot nearbyStartEvidence;
+    private volatile String installedApkSha256;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(buildUi());
+
+        new Thread(() -> {
+            installedApkSha256 = ProbeDeviceEvidence.computeInstalledApkSha256(getApplicationContext());
+            log("Evidence APK SHA-256 ready: " + installedApkSha256);
+        }, "solarnet-probe-apk-hash").start();
 
         bluetoothBridge = new SolarBluetoothClassicBridge(this, new BluetoothCallback());
         nearbyBridge = new SolarNearbyBridge(this, new NearbyCallback());
@@ -118,7 +124,7 @@ public final class MainActivity extends Activity {
             @Override
             public void onFinished(ProbeSoakStats.Snapshot snapshot, String reason) {
                 ProbeEvidenceSnapshot start = startEvidence(mode);
-                ProbeEvidenceSnapshot end = ProbeDeviceEvidence.capture(MainActivity.this, BuildConfig.SOURCE_SHA);
+                ProbeEvidenceSnapshot end = ProbeDeviceEvidence.capture(MainActivity.this, BuildConfig.SOURCE_SHA, installedApkSha256);
                 String result = ProbeEvidenceEnvelope.toJson(
                         mode.evidenceName,
                         PROBE_VERSION,
@@ -415,9 +421,13 @@ public final class MainActivity extends Activity {
             log("Connect to the host before starting the soak.");
             return;
         }
+        if (installedApkSha256 == null) {
+            log("Evidence APK SHA-256 is still preparing; retry start shortly.");
+            return;
+        }
         ProbeSoakController controller = controller(activeMode);
         try {
-            setStartEvidence(activeMode, ProbeDeviceEvidence.capture(this, BuildConfig.SOURCE_SHA));
+            setStartEvidence(activeMode, ProbeDeviceEvidence.capture(this, BuildConfig.SOURCE_SHA, installedApkSha256));
             String runId = controller.start();
             setStatus(activeMode.displayName + " soak " + runId);
         } catch (Throwable t) {
