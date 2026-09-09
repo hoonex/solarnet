@@ -13,7 +13,7 @@ import java.security.MessageDigest;
 final class ProbeDeviceEvidence {
     private ProbeDeviceEvidence() { }
 
-    static ProbeEvidenceSnapshot capture(Context context, String sourceSha) {
+    static ProbeEvidenceSnapshot capture(Context context, String sourceSha, String apkSha256) {
         int batteryPercent = -1;
         double batteryTemperatureC = Double.NaN;
         int batteryVoltageMv = -1;
@@ -45,7 +45,11 @@ final class ProbeDeviceEvidence {
                 batteryVoltageMv,
                 thermalStatus,
                 sourceSha,
-                sha256File(context.getApplicationInfo().sourceDir));
+                apkSha256);
+    }
+
+    static String computeInstalledApkSha256(Context context) {
+        return sha256File(context.getApplicationInfo().sourceDir);
     }
 
     private static String sha256File(String path) {
