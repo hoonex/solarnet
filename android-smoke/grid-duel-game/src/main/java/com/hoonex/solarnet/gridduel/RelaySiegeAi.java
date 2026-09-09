@@ -199,6 +199,15 @@ public final class RelaySiegeAi {
                     || card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION)
                 score += 700;
         }
+
+        boolean quietBoard = here.enemyCount == 0 && other.enemyCount == 0
+                && here.friendlyCount == 0 && other.friendlyCount == 0;
+        if (quietBoard && game.getFluxMilli(player) > 9_200 && card.kind == RelaySiegeCards.Kind.UNIT) {
+            score += 1_700;
+            if (card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION) score += 900;
+            if (card.primaryRole == RelaySiegeCards.Role.TEMPO) score += 350;
+        }
+
         if (card.airborne && here.enemyAir == 0 && here.enemyGround > 0) score += 420;
         if (card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION) {
             score += Math.max(0, RelaySiegeGame.RELAY_MAX_HP - enemyRelayHp) / 3;
