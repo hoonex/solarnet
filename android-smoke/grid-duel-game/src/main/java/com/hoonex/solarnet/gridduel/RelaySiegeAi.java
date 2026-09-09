@@ -84,7 +84,7 @@ public final class RelaySiegeAi {
                             lane == RelaySiegeGame.Lane.LEFT ? right : left, handIndex);
                     String reason = explain(card, state, lane == RelaySiegeGame.Lane.LEFT ? right : left, game, player);
                     Decision candidate = Decision.play(card.id, lane, position, score, reason);
-                    if (better(candidate, best, game, player, handIndex)) best = candidate;
+                    if (better(candidate, best)) best = candidate;
                 }
             }
         }
@@ -140,8 +140,8 @@ public final class RelaySiegeAi {
         if (threat > 2_000) score -= threat / 2;
         if (flux < 3_000) score += 1_600;
         if (flux < 5_000) score += 650;
-        if (flux > 9_300) score -= 1_150; // wasting regeneration is a real cost.
-        if (left.friendlyForwardHp + right.friendlyForwardHp > 900) score -= 450; // convert survivors while they exist.
+        if (flux > 9_300) score -= 1_150;
+        if (left.friendlyForwardHp + right.friendlyForwardHp > 900) score -= 450;
         if (game.getTick() > RelaySiegeGame.REGULATION_TICKS) score -= 600;
         return score;
     }
@@ -168,7 +168,6 @@ public final class RelaySiegeAi {
         boolean urgent = here.nearestEnemyToOwnRelay < 25_000 || ownRelayHp < RelaySiegeGame.RELAY_MAX_HP * 55 / 100;
         boolean pressureOpportunity = other.enemyCount >= 2 && here.enemyCount == 0;
 
-        // Concrete defensive fit. Multiple tactical dimensions can create value, but each is tied to current board evidence.
         if (here.enemyCount > 0) {
             if (card.primaryRole == RelaySiegeCards.Role.SPLASH && here.enemyGround >= 2)
                 score += 1_250 + here.enemyGround * 260;
@@ -187,16 +186,14 @@ public final class RelaySiegeAi {
             if (urgent) score += defensiveCapability(card, here);
         }
 
-        // Surviving defenders are stored offensive value. Prefer adding a screen/win condition/buff to an existing push.
         if (here.friendlyForwardHp > 0) {
             if (card.primaryRole == RelaySiegeCards.Role.TANK) score += 540;
             if (card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION) score += 900 + here.friendlyForwardHp / 4;
             if ("overclock".equals(card.id)) score += 900 + here.friendlyForwardHp / 3 + here.friendlyCount * 180;
         } else if ("overclock".equals(card.id)) {
-            score -= 1_700; // no speculative buff spam.
+            score -= 1_700;
         }
 
-        // Lane-pressure and profile switching.
         if (pressureOpportunity) {
             if (card.primaryRole == RelaySiegeCards.Role.TEMPO || card.primaryRole == RelaySiegeCards.Role.AIR
                     || card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION)
@@ -206,10 +203,9 @@ public final class RelaySiegeAi {
         if (card.primaryRole == RelaySiegeCards.Role.WIN_CONDITION) {
             score += Math.max(0, RelaySiegeGame.RELAY_MAX_HP - enemyRelayHp) / 3;
             if (enemyRelayHp <= RelaySiegeGame.RELAY_MAX_HP / 3) score += 850;
-            if (urgent && here.enemyCount > 0) score -= 1_200; // don't race blindly through lethal pressure.
+            if (urgent && here.enemyCount > 0) score -= 1_200;
         }
 
-        // Cheap cycle gets a small value only when near Flux cap or when it produces a real second-lane obligation.
         if (cost <= 2) {
             if (game.getFluxMilli(player) > 8_800) score += 260;
             if (pressureOpportunity) score += 320;
@@ -217,7 +213,6 @@ public final class RelaySiegeAi {
                 score -= 260;
         }
 
-        // Buildings belong in defensive geometry; units should not be thrown at extreme invalid-looking edges.
         if (card.kind == RelaySiegeCards.Kind.BUILDING) {
             int desired = defensiveBuildingPosition(player);
             score -= Math.abs(position - desired) / 35;
@@ -228,7 +223,6 @@ public final class RelaySiegeAi {
             score -= 1_200;
         }
 
-        // Lower hand index is not strategically better; this tiny deterministic term only stabilizes exact ties.
         score -= handIndex;
         return score;
     }
@@ -257,9 +251,9 @@ public final class RelaySiegeAi {
             RelaySiegeGame.Lane lane,
             LaneState state) {
         if (card.kind == RelaySiegeCards.Kind.SPELL) {
-            if ("overclock".equals(card.id) && state.friendlyCount == 0) return Collections.singletonList(50_000);
-            int focus = tacticalFocus(game, player, lane, state);
-            return Collections.singletonList(focus);
+            boolean friendlyFocus = "overclock".equals(card.id);
+            if (friendlyFocus && state.friendlyCount == 0) return Collections.singletonList(50_000);
+            return Collections.singletonList(spellFocus(game, player, lane, friendlyFocus));
         }
 
         List<Integer> positions = new ArrayList<>();
@@ -274,23 +268,26 @@ public final class RelaySiegeAi {
         return positions;
     }
 
-    private static int tacticalFocus(
+    private static int spellFocus(
             RelaySiegeGame game,
             RelaySiegeGame.Player player,
             RelaySiegeGame.Lane lane,
-            LaneState state) {
-        int total = 0;
+            boolean friendlyFocus) {
+        long total = 0;
         int count = 0;
         for (RelaySiegeGame.EntityView entity : game.getEntities()) {
             if (entity.lane != lane) continue;
-            if ("overclock".equals("")) { /* keeps spell branch symmetric without hidden state */ }
-            if (entity.owner != player) {
-                total += entity.position;
-                count++;
+            if (friendlyFocus) {
+                if (entity.owner != player || entity.building) continue;
+            } else if (entity.owner == player) {
+                continue;
             }
+            total += entity.position;
+            count++;
         }
-        if (count > 0) return total / count;
-        return player == RelaySiegeGame.Player.SUN ? 55_000 : 45_000;
+        if (count > 0) return (int) (total / count);
+        if (friendlyFocus) return player == RelaySiegeGame.Player.SUN ? 42_000 : 58_000;
+        return player == RelaySiegeGame.Player.SUN ? 58_000 : 42_000;
     }
 
     private static int safeDeploymentPosition(RelaySiegeGame.Player player) {
@@ -330,10 +327,9 @@ public final class RelaySiegeAi {
         return "best current cost-to-board-impact trade";
     }
 
-    private static boolean better(Decision candidate, Decision incumbent, RelaySiegeGame game,
-                                  RelaySiegeGame.Player player, int handIndex) {
+    private static boolean better(Decision candidate, Decision incumbent) {
         if (candidate.score != incumbent.score) return candidate.score > incumbent.score;
-        if (candidate.wait != incumbent.wait) return candidate.wait; // exact tie favors information preservation.
+        if (candidate.wait != incumbent.wait) return candidate.wait;
         if (candidate.wait) return false;
         int c = candidate.cardId.compareTo(incumbent.cardId);
         if (c != 0) return c < 0;
