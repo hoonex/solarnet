@@ -172,8 +172,8 @@ public final class RelaySiegeCards {
                 "Defense → Counterpush",
                 "Absorb with Bulwark/Beacon, win the trade with Duelist or Pulse Guard, then spend Overclock only on survivors.",
                 "If you overspend on defense, the opponent can pressure the opposite lane while your cycle is heavy.",
-                "bulwark", "duelist", "arc_slinger", "pulse_guard",
-                "siege_walker", "relay_beacon", "gravity_well", "overclock"));
+                "bulwark", "duelist", "pulse_guard", "relay_beacon",
+                "arc_slinger", "siege_walker", "gravity_well", "overclock"));
 
         addDeck(new Deck(
                 "spark_cycle",
