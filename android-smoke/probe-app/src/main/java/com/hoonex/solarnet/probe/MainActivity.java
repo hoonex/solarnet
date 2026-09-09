@@ -46,7 +46,7 @@ public final class MainActivity extends Activity {
     private static final String BLUETOOTH_SERVICE_NAME = "SolarNet Transport Probe";
     private static final String NEARBY_SERVICE_ID = "com.hoonex.solarnet.probe";
     private static final String NEARBY_STRATEGY = "STAR";
-    private static final String PROBE_VERSION = "0.3.0";
+    private static final String PROBE_VERSION = "0.4.0";
 
     private final AtomicLong nextRequestId = new AtomicLong();
     private final List<String> bluetoothConnections = new ArrayList<>();
@@ -63,11 +63,19 @@ public final class MainActivity extends Activity {
     private LinearLayout deviceList;
     private TransportMode activeMode;
     private boolean hostMode;
+    private ProbeEvidenceSnapshot bluetoothStartEvidence;
+    private ProbeEvidenceSnapshot nearbyStartEvidence;
+    private volatile String installedApkSha256;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(buildUi());
+
+        new Thread(() -> {
+            installedApkSha256 = ProbeDeviceEvidence.computeInstalledApkSha256(getApplicationContext());
+            log("Evidence APK SHA-256 ready: " + installedApkSha256);
+        }, "solarnet-probe-apk-hash").start();
 
         bluetoothBridge = new SolarBluetoothClassicBridge(this, new BluetoothCallback());
         nearbyBridge = new SolarNearbyBridge(this, new NearbyCallback());
@@ -115,7 +123,18 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onFinished(ProbeSoakStats.Snapshot snapshot, String reason) {
-                String result = buildSoakResultJson(mode, snapshot, reason);
+                ProbeEvidenceSnapshot start = startEvidence(mode);
+                ProbeEvidenceSnapshot end = ProbeDeviceEvidence.capture(MainActivity.this, BuildConfig.SOURCE_SHA, installedApkSha256);
+                String result = ProbeEvidenceEnvelope.toJson(
+                        mode.evidenceName,
+                        PROBE_VERSION,
+                        Build.MANUFACTURER + " " + Build.MODEL,
+                        Build.VERSION.SDK_INT,
+                        Build.VERSION.RELEASE,
+                        start,
+                        end,
+                        snapshot.toJson(reason));
+                setStartEvidence(mode, null);
                 Log.i("SolarNetProbe", "SOLARNET_PROBE_RESULT " + result);
                 log("SOAK FINISH transport=" + mode.evidenceName + " " + snapshot.toSummary() + " reason=" + reason);
             }
@@ -402,11 +421,17 @@ public final class MainActivity extends Activity {
             log("Connect to the host before starting the soak.");
             return;
         }
+        if (installedApkSha256 == null) {
+            log("Evidence APK SHA-256 is still preparing; retry start shortly.");
+            return;
+        }
         ProbeSoakController controller = controller(activeMode);
         try {
+            setStartEvidence(activeMode, ProbeDeviceEvidence.capture(this, BuildConfig.SOURCE_SHA, installedApkSha256));
             String runId = controller.start();
             setStatus(activeMode.displayName + " soak " + runId);
         } catch (Throwable t) {
+            setStartEvidence(activeMode, null);
             log("ERROR start soak: " + message(t));
         }
     }
@@ -483,18 +508,13 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private String buildSoakResultJson(
-            TransportMode mode,
-            ProbeSoakStats.Snapshot snapshot,
-            String reason) {
-        String device = Build.MANUFACTURER + " " + Build.MODEL;
-        return "{" +
-                "\"transport\":\"" + mode.evidenceName + "\"," +
-                "\"probeVersion\":\"" + PROBE_VERSION + "\"," +
-                "\"deviceModel\":\"" + jsonEscape(device) + "\"," +
-                "\"sdkInt\":" + Build.VERSION.SDK_INT + "," +
-                "\"result\":" + snapshot.toJson(reason) +
-                "}";
+    private ProbeEvidenceSnapshot startEvidence(TransportMode mode) {
+        return mode == TransportMode.BLUETOOTH_CLASSIC ? bluetoothStartEvidence : nearbyStartEvidence;
+    }
+
+    private void setStartEvidence(TransportMode mode, ProbeEvidenceSnapshot snapshot) {
+        if (mode == TransportMode.BLUETOOTH_CLASSIC) bluetoothStartEvidence = snapshot;
+        else nearbyStartEvidence = snapshot;
     }
 
     private static String localEndpointName() {
