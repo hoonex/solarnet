@@ -27,6 +27,22 @@ public final class ProbeEvidenceSnapshotSmoke {
         require(unavailableJson.contains("\"sourceSha\":\"unknown\""), "unknown source fallback missing");
         require(unavailableJson.contains("\"apkSha256\":\"unknown\""), "unknown APK fallback missing");
 
+        String envelope = ProbeEvidenceEnvelope.toJson(
+                "nearby-connections",
+                "0.4.0",
+                "Example Phone",
+                36,
+                "16",
+                snapshot,
+                unavailable,
+                "{\"completionReason\":\"completed\"}");
+        require(envelope.contains("\"transport\":\"nearby-connections\""), "transport missing");
+        require(envelope.contains("\"probeVersion\":\"0.4.0\""), "probe version missing");
+        require(envelope.contains("\"androidRelease\":\"16\""), "Android release missing");
+        require(envelope.contains("\"evidence\":{\"start\":"), "evidence start missing");
+        require(envelope.contains("\"end\":"), "evidence end missing");
+        require(envelope.contains("\"completionReason\":\"completed\""), "result payload missing");
+
         System.out.println("Probe evidence snapshot smoke: PASS");
     }
 
