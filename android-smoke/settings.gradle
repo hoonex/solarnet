@@ -12,3 +12,4 @@ project(':solarnet-nearby').projectDir = file('../Packages/com.hoonex.solarnet/P
 include ':solarnet-bluetooth-classic'
 project(':solarnet-bluetooth-classic').projectDir = file('../Packages/com.hoonex.solarnet/Plugins/Android/SolarNetBluetoothClassic.androidlib')
 include ':probe-app'
+include ':grid-duel-game'
