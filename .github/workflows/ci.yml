@@ -56,6 +56,8 @@ jobs:
   android-transports:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SOLARNET_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -74,19 +76,31 @@ jobs:
             android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeSoakStats.java \
             android-smoke/probe-tests/ProbeSoakStatsSmoke.java
           java -cp /tmp/solarnet-probe-stats com.hoonex.solarnet.probe.ProbeSoakStatsSmoke
+      - name: Run probe evidence envelope smoke test
+        run: |
+          rm -rf /tmp/solarnet-probe-evidence && mkdir -p /tmp/solarnet-probe-evidence
+          javac -d /tmp/solarnet-probe-evidence \
+            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceSnapshot.java \
+            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceEnvelope.java \
+            android-smoke/probe-tests/ProbeEvidenceSnapshotSmoke.java
+          java -cp /tmp/solarnet-probe-evidence com.hoonex.solarnet.probe.ProbeEvidenceSnapshotSmoke
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
         run: gradle -p android-smoke :solarnet-bluetooth-classic:assembleDebug --no-daemon --stacktrace
       - name: Build physical transport probe APK
         run: gradle -p android-smoke :probe-app:assembleDebug --no-daemon --stacktrace
-      - name: Verify Probe 0.3.0 merged radio manifest
+      - name: Verify Probe 0.4.0 build identity and radio manifest
         run: |
           APK="android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           "$AAPT" dump badging "$APK" | tee /tmp/probe-badging.txt
-          grep -Fq "versionCode='3'" /tmp/probe-badging.txt
-          grep -Fq "versionName='0.3.0'" /tmp/probe-badging.txt
+          grep -Fq "versionCode='4'" /tmp/probe-badging.txt
+          grep -Fq "versionName='0.4.0'" /tmp/probe-badging.txt
+          grep -Fq "sdkVersion:'24'" /tmp/probe-badging.txt
+          BUILD_CONFIG=$(find android-smoke/probe-app/build/generated/source/buildConfig/debug -name BuildConfig.java -print -quit)
+          test -n "$BUILD_CONFIG"
+          grep -Fq "SOURCE_SHA = \"${SOLARNET_SOURCE_SHA}\"" "$BUILD_CONFIG"
           "$AAPT" dump permissions "$APK" | tee /tmp/probe-permissions.txt
           grep -Fq 'android.permission.BLUETOOTH_ADVERTISE' /tmp/probe-permissions.txt
           grep -Fq 'android.permission.BLUETOOTH_CONNECT' /tmp/probe-permissions.txt
