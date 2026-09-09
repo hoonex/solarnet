@@ -308,7 +308,10 @@ public final class MainActivity extends Activity {
         awaitingHostState = !networkHost;
         showGame();
         if (networkHost) sendAuthoritativeState();
-        else refreshGameUi("HOST의 게임 상태를 기다리는 중…");
+        else {
+            refreshGameUi("HOST의 게임 상태를 기다리는 중…");
+            sendNetworkPayload(GameProtocol.encodeReady());
+        }
     }
 
     private void showGame() {
@@ -489,6 +492,10 @@ public final class MainActivity extends Activity {
     private void handleNetworkPayload(byte[] payload) {
         try {
             GameProtocol.Frame frame = GameProtocol.decode(payload);
+            if (frame.type == GameProtocol.Frame.Type.READY) {
+                if (networkHost) sendAuthoritativeState();
+                return;
+            }
             if (frame.type == GameProtocol.Frame.Type.STATE) {
                 if (networkHost) return;
                 frame.applyTo(game);
