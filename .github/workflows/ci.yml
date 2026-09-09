@@ -55,7 +55,7 @@ jobs:
 
   android-transports:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     env:
       SOLARNET_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -84,6 +84,14 @@ jobs:
             android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceEnvelope.java \
             android-smoke/probe-tests/ProbeEvidenceSnapshotSmoke.java
           java -cp /tmp/solarnet-probe-evidence com.hoonex.solarnet.probe.ProbeEvidenceSnapshotSmoke
+      - name: Run Grid Duel Android game logic smoke test
+        run: |
+          rm -rf /tmp/grid-duel-game && mkdir -p /tmp/grid-duel-game
+          javac -d /tmp/grid-duel-game \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/GridDuelGame.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/GameProtocol.java \
+            android-smoke/game-tests/GridDuelGameSmoke.java
+          java -cp /tmp/grid-duel-game com.hoonex.solarnet.gridduel.GridDuelGameSmoke
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
@@ -117,4 +125,29 @@ jobs:
           path: |
             android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk
             android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk.sha256
+          retention-days: 14
+      - name: Build playable Grid Duel Android APK
+        run: gradle -p android-smoke :grid-duel-game:assembleDebug --no-daemon --stacktrace
+      - name: Verify Grid Duel Android APK identity
+        run: |
+          APK="android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          "$AAPT" dump badging "$APK" | tee /tmp/grid-duel-badging.txt
+          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='1' versionName='0.1.0'" /tmp/grid-duel-badging.txt
+          grep -Fq "sdkVersion:'24'" /tmp/grid-duel-badging.txt
+          "$AAPT" dump permissions "$APK" | tee /tmp/grid-duel-permissions.txt
+          grep -Fq 'android.permission.BLUETOOTH_CONNECT' /tmp/grid-duel-permissions.txt
+          grep -Fq 'android.permission.BLUETOOTH_SCAN' /tmp/grid-duel-permissions.txt
+          grep -Fq 'android.permission.NEARBY_WIFI_DEVICES' /tmp/grid-duel-permissions.txt
+      - name: Write Grid Duel checksum
+        run: |
+          cd android-smoke/grid-duel-game/build/outputs/apk/debug
+          sha256sum grid-duel-game-debug.apk > grid-duel-game-debug.apk.sha256
+      - name: Upload playable Grid Duel APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: grid-duel-android-game-apk
+          path: |
+            android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk
+            android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk.sha256
           retention-days: 14
