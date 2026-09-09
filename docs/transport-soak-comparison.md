@@ -1,13 +1,13 @@
 # Nearby vs Bluetooth physical soak comparison
 
-SolarNet Probe 0.3.0 runs the same framed soak protocol and the same `ProbeSoakStats` implementation over two Android transports:
+SolarNet Probe 0.4.0 runs the same framed soak protocol and the same `ProbeSoakStats` implementation over two Android transports:
 
 - secure Bluetooth Classic RFCOMM;
 - Google Nearby Connections using the P2P STAR strategy.
 
-The purpose is not to declare one transport universally faster. The purpose is to collect comparable packet-loss, disconnect/error, and RTT evidence under the same phones, source build, timing, and workload.
+The purpose is not to declare one transport universally faster. The purpose is to collect comparable packet-loss, disconnect/error, RTT, and bounded start/end device evidence under the same phones, source build, timing, and workload.
 
-CI can prove the common controller compiles, deterministic metric accounting passes, and the Probe APK is produced. It cannot prove physical radio reliability or latency. Those claims require real phones.
+CI can prove the common controller compiles, deterministic metric/evidence serialization passes, and the Probe APK is produced. It cannot prove physical radio reliability, latency, thermal behavior, or power usage. Those claims require real phones.
 
 ## Shared measurement contract
 
@@ -28,6 +28,8 @@ Default workload:
 - identical counters and `clean` semantics for both transports.
 
 The final log record begins with `SOLARNET_PROBE_RESULT` and identifies the transport as either `bluetooth-classic` or `nearby-connections`.
+
+Probe 0.4.0 also records the same evidence envelope for either transport: source SHA, installed APK SHA-256, Android version, start/end battery percentage, battery temperature/voltage when exposed, and Android thermal status when supported. This evidence is sampled only at the run boundaries and does not change the 1 Hz packet workload.
 
 ## Fair-comparison controls
 
@@ -54,28 +56,30 @@ This reduces warm-up, temperature, battery, and order effects. It still does not
 ## Bluetooth Classic procedure
 
 1. Pair the two phones in Android Bluetooth settings.
-2. Open Probe 0.3.0 on both phones and press **Request radio permissions** as needed.
-3. On phone A, press **BT HOST: start RFCOMM server**.
-4. On phone B, press **BT CLIENT: refresh paired devices** and connect to phone A.
-5. Confirm both phones report a Bluetooth connection.
-6. On phone B only, press **CLIENT: start 10-minute soak**.
-7. Leave the run active until `completionReason=completed`.
-8. Capture the client `SOLARNET_PROBE_RESULT` record.
+2. Open Probe 0.4.0 on both phones and press **Request radio permissions** as needed.
+3. Wait for the evidence APK SHA-256 ready log.
+4. On phone A, press **BT HOST: start RFCOMM server**.
+5. On phone B, press **BT CLIENT: refresh paired devices** and connect to phone A.
+6. Confirm both phones report a Bluetooth connection.
+7. On phone B only, press **CLIENT: start 10-minute soak**.
+8. Leave the run active until `completionReason=completed`.
+9. Capture the client `SOLARNET_PROBE_RESULT` record.
 
 Bluetooth uses the existing paired-device RFCOMM path. Pairing state is therefore part of its setup evidence.
 
 ## Nearby procedure
 
-1. Install the same Probe 0.3.0 APK on both phones.
+1. Install the same Probe 0.4.0 APK on both phones.
 2. Open Probe and grant the requested Bluetooth/location/Nearby Wi-Fi permissions applicable to that Android version.
-3. On phone A, press **Nearby HOST: advertise**.
-4. On phone B, press **Nearby CLIENT: discover**.
-5. When phone A appears, press its **Nearby connect** button.
-6. Both devices must show the same Nearby authentication digits. Accept only by pressing **Digits match** after visually confirming the codes match. Reject a mismatch.
-7. After connection, Probe stops advertising on the host and discovery on the client before the soak workload. This prevents continued discovery activity from becoming a transport-specific measurement load.
-8. On phone B only, press **CLIENT: start 10-minute soak**.
-9. Leave the run active until `completionReason=completed`.
-10. Capture the client `SOLARNET_PROBE_RESULT` record.
+3. Wait for the evidence APK SHA-256 ready log.
+4. On phone A, press **Nearby HOST: advertise**.
+5. On phone B, press **Nearby CLIENT: discover**.
+6. When phone A appears, press its **Nearby connect** button.
+7. Both devices must show the same Nearby authentication digits. Accept only by pressing **Digits match** after visually confirming the codes match. Reject a mismatch.
+8. After connection, Probe stops advertising on the host and discovery on the client before the soak workload. This prevents continued discovery activity from becoming a transport-specific measurement load.
+9. On phone B only, press **CLIENT: start 10-minute soak**.
+10. Leave the run active until `completionReason=completed`.
+11. Capture the client `SOLARNET_PROBE_RESULT` record.
 
 Do not automate away the authentication-digit check. An unverified Nearby connection is not equivalent evidence to the intended authenticated flow.
 
@@ -83,11 +87,13 @@ Do not automate away the authentication-digit check. An unverified Nearby connec
 
 Interpret evidence in this order:
 
-1. completion reason;
-2. disconnects and send/bridge errors;
-3. missing/loss, duplicate, and invalid packets;
-4. RTT distribution summary;
-5. thermal/power observations, if separately measured.
+1. artifact/source identity match;
+2. completion reason;
+3. disconnects and send/bridge errors;
+4. missing/loss, duplicate, and invalid packets;
+5. RTT distribution summary;
+6. start/end thermal and battery observations;
+7. richer thermal/power evidence, if separately measured.
 
 A lower RTT does not compensate for repeated disconnects or packet loss in a local turn-based game. Reliability comes before small latency differences for SolarNet's target workload.
 
@@ -95,32 +101,45 @@ The Probe currently records minimum, average, and maximum RTT rather than a full
 
 ## Evidence record
 
-For every physical run preserve at minimum:
+The `SOLARNET_PROBE_RESULT` JSON now automatically carries most build/client evidence. For every physical run still preserve at minimum:
 
 ```text
-source commit SHA
-Probe APK SHA-256
-Probe version
-transport
-host device model + Android version
-client device model + Android version
-physical placement notes
-start/end time
 SOLARNET_PROBE_RESULT JSON
+CI artifact checksum file
+host device model + Android version
+physical placement notes
 unexpected disconnect/error notes
 ```
 
-If thermal or power is being evaluated, also preserve the starting/end battery and thermal evidence described in `physical-radio-soak.md`.
+Inside the JSON, preserve and compare:
+
+```text
+sourceSha
+apkSha256
+probeVersion
+transport
+client device model + Android version
+start/end capture timestamps
+start/end battery percentage/temperature/voltage
+start/end thermal status
+packet/RTT result object
+```
+
+The source SHA and installed APK SHA should match the intended CI build identity for the normal single-APK sideload path. A mismatch is provenance evidence that must be explained before comparing transport results.
+
+If thermal or power is being evaluated beyond the bounded start/end fields, also preserve the richer ADB/system evidence described in `physical-radio-soak.md`.
 
 ## Pass/fail usage
 
 For an initial baseline, do not invent a universal latency SLA before observing devices. A useful first target is:
 
+- tested source/artifact identity matches the intended build;
 - `completionReason=completed`;
 - no disconnects;
 - no bridge/send errors;
 - zero missing, duplicate, and invalid responses preferred;
-- RTT min/avg/max preserved exactly as measured.
+- RTT min/avg/max preserved exactly as measured;
+- start/end device evidence retained even when the run is not clean.
 
 A non-clean result is evidence, not a reason to hide the run. Diagnose the failure class before changing transport code.
 
@@ -139,4 +158,4 @@ THERMAL_UNVERIFIED
 POWER_UNVERIFIED
 ```
 
-Running one transport physically upgrades evidence only for that tested transport, device pair, build, and workload. It does not automatically validate the other transport or all Android devices.
+Running one transport physically upgrades evidence only for that tested transport, device pair, build, and workload. It does not automatically validate the other transport or all Android devices. Automatic battery/thermal fields improve evidence capture but do not upgrade those states until a real run exists.
