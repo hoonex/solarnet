@@ -3,6 +3,7 @@ package com.hoonex.solarnet.gridduel;
 public final class GridDuelGameSmoke {
     public static void main(String[] args) {
         basicTurnAndCombat();
+        readyProtocolRoundTrip();
         stateProtocolRoundTrip();
         actionProtocolRoundTrip();
         aiMovesTowardOpponent();
@@ -37,6 +38,11 @@ public final class GridDuelGameSmoke {
         require(finalMoonAttack.winner == GridDuelGame.Player.MOON, "MOON should win on third hit");
         require(game.getSunHp() == 0, "SUN HP reaches zero");
         require(game.getCurrentPlayer() == GridDuelGame.Player.NONE, "finished match has no active player");
+    }
+
+    private static void readyProtocolRoundTrip() {
+        GameProtocol.Frame ready = GameProtocol.decode(GameProtocol.encodeReady());
+        require(ready.type == GameProtocol.Frame.Type.READY, "decoded ready type");
     }
 
     private static void stateProtocolRoundTrip() {
