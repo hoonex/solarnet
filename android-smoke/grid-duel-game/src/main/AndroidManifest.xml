@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
 
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -13,10 +14,19 @@
 
     <application
         android:allowBackup="false"
-        android:label="Grid Duel"
+        android:hardwareAccelerated="true"
+        android:label="Solar Arcade"
         android:theme="@style/GridDuelTheme">
         <activity
+            android:name=".PulseHockeyActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
+            android:name=".SolarArcadeActivity"
             android:screenOrientation="portrait"
             android:exported="true">
             <intent-filter>
