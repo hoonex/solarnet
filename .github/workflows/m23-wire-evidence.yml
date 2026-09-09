@@ -1,0 +1,54 @@
+name: M23 Wire Probe Evidence
+
+on:
+  push:
+    branches:
+      - feat/probe-evidence-bundle
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Guard exact input
+        run: |
+          test "$(git rev-parse HEAD^)" = "86b7c217d15c014bf46f89ef21f01bbe879b86ee"
+          test -f .github/m23-wire-evidence.py
+      - name: Apply bounded activity wiring
+        run: python3 .github/m23-wire-evidence.py
+      - name: Verify evidence JSON model
+        run: |
+          rm -rf /tmp/probe-evidence && mkdir -p /tmp/probe-evidence
+          javac -d /tmp/probe-evidence \
+            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceSnapshot.java \
+            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceEnvelope.java \
+            android-smoke/probe-tests/ProbeEvidenceSnapshotSmoke.java
+          java -cp /tmp/probe-evidence com.hoonex.solarnet.probe.ProbeEvidenceSnapshotSmoke
+      - name: Ensure Android 36 SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Build Probe 0.4.0
+        env:
+          SOLARNET_SOURCE_SHA: ${{ github.sha }}
+        run: gradle -p android-smoke :probe-app:assembleDebug --no-daemon --stacktrace
+      - name: Publish product patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/MainActivity.java
+          test "$(git diff --cached --name-only)" = "android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/MainActivity.java"
+          git commit -m "Wire probe evidence snapshots"
+          git push origin HEAD:feat/probe-evidence-bundle
