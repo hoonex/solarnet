@@ -21,6 +21,7 @@ public final class SolarArcadeActivity extends Activity {
     private static final int MUTED = Color.rgb(151, 160, 178);
     private static final int CYAN = Color.rgb(96, 224, 255);
     private static final int ORANGE = Color.rgb(255, 174, 61);
+    private static final int GREEN = Color.rgb(94, 225, 157);
     private static final int MOON = Color.rgb(111, 130, 255);
 
     @Override
@@ -48,12 +49,20 @@ public final class SolarArcadeActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "한 번에 여러 게임을 대충 넣지 않고, 각 게임을 독립적으로 완성해 나가는 실험실.",
+                "한 번에 여러 게임을 대충 넣지 않고, 각 게임의 규칙과 상호작용을 독립적으로 깊게 만드는 실험실.",
                 15,
                 MUTED,
                 false);
         subtitle.setPadding(0, dp(10), 0, dp(25));
         root.addView(subtitle);
+
+        root.addView(gameCard(
+                "02",
+                "RELAY SIEGE",
+                "2라인 실시간 덱 전략 · Flux · 어그로 · 역공",
+                "3 DECKS · AI · LIVE DECK GUIDE · REAL ENGINE REPLAY",
+                GREEN,
+                v -> startActivity(new Intent(this, RelaySiegeActivity.class))));
 
         root.addView(gameCard(
                 "01",
@@ -77,7 +86,7 @@ public final class SolarArcadeActivity extends Activity {
                 v -> startActivity(new Intent(this, MainActivity.class))));
 
         TextView footer = text(
-                "Pulse Hockey의 규칙과 AI를 먼저 안정화한 뒤 다음 게임을 추가합니다.",
+                "Relay Siege의 덱 가이드 전투 예시는 실제 게임 엔진과 같은 규칙으로 재생됩니다.",
                 12,
                 MUTED,
                 false);
