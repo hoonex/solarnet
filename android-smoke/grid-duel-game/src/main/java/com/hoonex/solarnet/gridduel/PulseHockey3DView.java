@@ -24,6 +24,7 @@ public final class PulseHockey3DView extends GLSurfaceView {
     private final ArenaRenderer arenaRenderer;
     private AimListener aimListener;
     private boolean aimEnabled;
+    private boolean rendererPaused;
     private float downX;
     private float downY;
 
@@ -67,6 +68,26 @@ public final class PulseHockey3DView extends GLSurfaceView {
 
     public void clearAim() {
         queueEvent(arenaRenderer::clearAim);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        onPause();
+        super.onDetachedFromWindow();
+    }
+
+    @Override
+    public void onPause() {
+        if (rendererPaused) return;
+        rendererPaused = true;
+        super.onPause();
+    }
+
+    @Override
+    public void onResume() {
+        if (!rendererPaused || !isAttachedToWindow()) return;
+        rendererPaused = false;
+        super.onResume();
     }
 
     @Override
