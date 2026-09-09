@@ -7,6 +7,10 @@ public final class GameProtocol {
 
     private GameProtocol() { }
 
+    public static byte[] encodeReady() {
+        return (PREFIX + "|READY").getBytes(StandardCharsets.UTF_8);
+    }
+
     public static byte[] encodeState(GridDuelGame game) {
         String text = PREFIX + "|STATE|" +
                 game.getTurnIndex() + "|" +
@@ -28,6 +32,11 @@ public final class GameProtocol {
         String[] parts = text.split("\\|", -1);
         if (parts.length < 2 || !PREFIX.equals(parts[0]))
             throw new IllegalArgumentException("not a Grid Duel frame");
+
+        if ("READY".equals(parts[1])) {
+            if (parts.length != 2) throw new IllegalArgumentException("invalid ready frame");
+            return Frame.ready();
+        }
 
         if ("ACTION".equals(parts[1])) {
             if (parts.length != 5) throw new IllegalArgumentException("invalid action frame");
@@ -61,7 +70,7 @@ public final class GameProtocol {
     }
 
     public static final class Frame {
-        public enum Type { ACTION, STATE }
+        public enum Type { READY, ACTION, STATE }
 
         public final Type type;
         public final int turnIndex;
@@ -98,6 +107,10 @@ public final class GameProtocol {
             this.moonY = moonY;
             this.moonHp = moonHp;
             this.winner = winner;
+        }
+
+        static Frame ready() {
+            return new Frame(Type.READY, 0, 0, 0, 0, 0, 0, 0, 0, 0, GridDuelGame.Player.NONE);
         }
 
         static Frame action(int turnIndex, int x, int y) {
