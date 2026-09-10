@@ -24,7 +24,7 @@ Tactical Trainer turns deck-guide advice into measured decisions instead of stat
 - the teaching answer is CI-locked to the choice that actually wins under current engine rules
 - the Android UI hides future results before the choice, then lets the player switch between their replay and the best-line replay
 - replay final state is digest-locked to the state used by the trainer score, preventing guide animation from drifting away from gameplay
-- initial lessons teach structure-target building pulls, splash-positive swarm defense and survivor-to-counterpush conversion
+- initial lessons teach structure-target building pulls, splash-positive swarm defense, survivor-to-counterpush conversion, and the opposite decision when an undefended second lane makes a cheap split push more valuable than stacking the existing counterpush
 
 ### Deck Lab — Solar Arcade 0.4.0+
 
