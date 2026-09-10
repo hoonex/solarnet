@@ -1,0 +1,54 @@
+name: M29 Tactical Trainer UI Wiring
+
+on:
+  push:
+    branches:
+      - feat/relay-siege-tactical-trainer
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/relay-siege-tactical-trainer
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Apply bounded Relay Siege entry wiring
+        run: python3 .github/m29-trainer-ui-wiring.py
+      - name: Prove trainer core and replay lock
+        run: |
+          rm -rf /tmp/relay-trainer && mkdir -p /tmp/relay-trainer
+          javac -d /tmp/relay-trainer \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCards.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeGame.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckGuide.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeAi.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalTrainer.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalReplay.java \
+            android-smoke/game-tests/RelaySiegeTacticalTrainerSmoke.java \
+            android-smoke/game-tests/RelaySiegeTacticalReplaySmoke.java
+          java -cp /tmp/relay-trainer com.hoonex.solarnet.gridduel.RelaySiegeTacticalTrainerSmoke
+          java -cp /tmp/relay-trainer com.hoonex.solarnet.gridduel.RelaySiegeTacticalReplaySmoke
+      - name: Ensure Android 36 SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Build Solar Arcade with Tactical Trainer
+        run: gradle -p android-smoke :grid-duel-game:assembleDebug --no-daemon --stacktrace
+      - name: Publish verified Relay Siege entry patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeActivity.java
+          test "$(git diff --cached --name-only)" = "android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeActivity.java"
+          git commit -m "Wire Tactical Trainer into Relay Siege"
+          git push origin HEAD:feat/relay-siege-tactical-trainer
