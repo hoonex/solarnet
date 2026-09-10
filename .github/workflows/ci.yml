@@ -100,7 +100,7 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyAi.java \
             android-smoke/game-tests/PulseHockeyGameSmoke.java
           java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyGameSmoke
-      - name: Run Relay Siege combat, cycle, guide and AI smoke tests
+      - name: Run Relay Siege combat, cycle, guide, AI and Deck Lab smoke tests
         run: |
           rm -rf /tmp/relay-siege && mkdir -p /tmp/relay-siege
           javac -d /tmp/relay-siege \
@@ -108,10 +108,13 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeGame.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckGuide.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeAi.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckLab.java \
             android-smoke/game-tests/RelaySiegeGameSmoke.java \
-            android-smoke/game-tests/RelaySiegeAiSmoke.java
+            android-smoke/game-tests/RelaySiegeAiSmoke.java \
+            android-smoke/game-tests/RelaySiegeDeckLabSmoke.java
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeGameSmoke
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeAiSmoke
+          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeDeckLabSmoke
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
