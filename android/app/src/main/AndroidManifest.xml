@@ -9,7 +9,15 @@
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="true">
         <activity
+            android:name=".SoloGameActivity"
+            android:screenOrientation="landscape"
+            android:exported="false" />
+        <activity
             android:name=".GameActivity"
+            android:screenOrientation="landscape"
+            android:exported="false" />
+        <activity
+            android:name=".MultiplayerActivity"
             android:screenOrientation="landscape"
             android:exported="false" />
         <activity

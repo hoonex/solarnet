@@ -1,45 +1,35 @@
 # Nightshift
 
-Nightshift is a clean-slate 1–4 player cooperative first-person horror prototype. The retired Solar Arcade / SolarNet Bluetooth/Nearby product paths are not part of the current product.
+Nightshift is a first-person horror game prototype for Android. **Single-player is now the primary standalone path:** install the APK, tap `PLAY SOLO`, and the full facility simulation runs in-process with no server address, room code, second device, or network connection.
 
-## 0.3.0 vertical slice
+## 0.4.0 — standalone playable build
 
-The team now has to recover three physical fuses, install one fuse into each breaker, recover the shared security keycard, and then reach the extraction door. A disconnected player keeps a carried fuse during the reconnect lease; if the lease expires and the player is removed, that fuse returns to its spawn so the round cannot become unwinnable.
+The launcher is now a real game menu rather than a server configuration screen. `PLAY SOLO` starts a local 20 Hz authoritative `GameSimulation` through `SoloGameRuntime`; multiplayer remains available as a separate experimental menu.
 
-The authority also owns deterministic horror pacing. Blackouts begin after play has actually started, repeat on a fixed schedule, and breaker activation creates a six-second hunter surge. Snapshot state carries the blackout/threat/surge/objective truth so every client presents the same event.
-
-The Android renderer now has a directional flashlight beam, distance fog, dim ambient light, emergency-light blackouts, world-visible fuses/keycard, powered breaker feedback, a locked/unlocked extraction door, and a stronger hunter silhouette. HUD/event banners expose carried fuse, keycard, threat, blackout, hunt surge and major server events.
-
-## Multiplayer architecture
-
-- `shared/` — authoritative game rules, objective/director state, facility geometry, prediction/interpolation, snapshots and Protocol v3.
-- `server/` — Java 17 TCP authority, room registry, 20 Hz simulation and 10 Hz snapshots.
-- `android/` — Android first-person OpenGL ES client.
-- `tests/` — rule/protocol/prediction/interpolation and real localhost TCP smoke tests.
-
-Nightshift keeps game truth on the server. Local movement prediction only improves presentation; snapshots acknowledge accepted input and reconciliation remains the correctness boundary. Remote actors are interpolated without extrapolation. Transient disconnects retain the same room/player/token for the existing 10-second resume lease.
+A solo round boots directly into gameplay. The player can walk/look/sprint, toggle the flashlight, pick up one fuse at a time, recover the security keycard, install fuses into three breakers, survive blackouts and hunter surges, unlock extraction, and either escape or get caught. The in-game HUD shows objective state, stamina, flashlight charge, threat, context-sensitive USE prompts, event banners, and an explicit win/loss screen with retry.
 
 ## Core loop
 
-1. Join/create a room and ready up.
-2. Search separate facility zones for three fuses and the security keycard.
-3. Carry one fuse at a time to an unpowered breaker.
-4. Expect a hunter surge after power restoration and periodic facility blackouts.
-5. Revive downed teammates.
-6. After all three breakers and the keycard are complete, escape through the north extraction door.
+1. Tap `PLAY SOLO` from the launcher.
+2. Explore the facility and recover three physical fuses plus the security keycard.
+3. Carry one fuse at a time to an unpowered breaker and hold USE to restore it.
+4. Avoid the authoritative hunter; sprint and interaction noise can reveal you.
+5. Survive periodic blackouts and the surge triggered by restoring power.
+6. After all three breakers and the keycard are complete, reach the north extraction door and escape.
 
-## Run the authority
+## Architecture
 
-```bash
-mkdir -p out
-javac --release 17 -d out $(find shared/src/main/java server/src/main/java -name '*.java')
-printf 'Main-Class: com.hoonex.nightshift.server.NightshiftServer\n' > /tmp/nightshift-manifest.mf
-jar cfm nightshift-server.jar /tmp/nightshift-manifest.mf -C out .
-java -jar nightshift-server.jar 46000
-```
+- `shared/` — game rules, local solo runtime, objective/director state, facility geometry, snapshots and Protocol v3.
+- `android/` — standalone first-person game, main menu, optional multiplayer lobby, OpenGL ES presentation.
+- `server/` — optional Java 17 TCP authority for experimental 1–4 player multiplayer.
+- `tests/` — standalone runtime, simulation, protocol, prediction/interpolation and localhost multiplayer smoke tests.
 
-For Internet play, run the authority on a publicly reachable host and expose the chosen TCP port. TLS, authenticated matchmaking, relay fallback and hosted production infrastructure remain later milestones.
+Single-player and multiplayer intentionally use the same `GameSimulation` rules. Solo does not fake or bypass the game: it owns an in-process authority and advances the same 20 Hz simulation without sockets.
+
+## Multiplayer
+
+`MULTIPLAYER · EXPERIMENTAL` opens the server lobby. That path still requires a reachable Nightshift authority server and keeps Protocol v3 prediction/reconciliation/reconnect behavior. Multiplayer is no longer required to launch or play the APK.
 
 ## Evidence boundary
 
-CI can prove Java compilation, objective/director/protocol/prediction/interpolation tests, localhost TCP create/join/resume behavior, Android compilation, package/permission identity and artifact generation. CI does **not** prove real-phone touch feel, final visual quality, actual WAN latency/jitter/loss behavior, performance, thermal behavior, audio quality or battery use.
+CI proves the standalone runtime boot/step contract, shared game tests, server tests, Android compilation, package/version identity, launcher source contract and APK generation. It does **not** prove real-phone control feel, final 3D art quality, frame pacing, thermal/power behavior, audio quality, or real WAN multiplayer quality. Those require physical-device/runtime testing.
