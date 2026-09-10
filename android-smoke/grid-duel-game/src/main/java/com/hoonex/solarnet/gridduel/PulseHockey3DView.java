@@ -239,6 +239,8 @@ public final class PulseHockey3DView extends GLSurfaceView {
         private int uModel;
         private int uColor;
         private int uLight;
+        private float surfaceAspect = 1f;
+        private PulseHockeyCameraRig.Frame cameraFrame;
 
         private boolean aiming;
         private PulseHockeyGame.Player aimPlayer = PulseHockeyGame.Player.NONE;
@@ -287,17 +289,15 @@ public final class PulseHockey3DView extends GLSurfaceView {
         @Override
         public void onSurfaceChanged(GL10 gl, int width, int height) {
             GLES20.glViewport(0, 0, width, height);
-            float aspect = Math.max(0.5f, width / (float) Math.max(1, height));
-            Matrix.perspectiveM(projection, 0, 48f, aspect, 1f, 70f);
-            Matrix.setLookAtM(view, 0,
-                    0f, 13.4f, -16.2f,
-                    0f, 0f, 0.7f,
-                    0f, 1f, 0f);
-            Matrix.multiplyMM(pv, 0, projection, 0, view, 0);
+            surfaceAspect = clamp(width / (float) Math.max(1, height),
+                    PulseHockeyCameraRig.MIN_ASPECT, PulseHockeyCameraRig.MAX_ASPECT);
+            cameraFrame = null;
+            updateCamera();
         }
 
         @Override
         public void onDrawFrame(GL10 gl) {
+            updateCamera();
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
             GLES20.glUseProgram(program);
             GLES20.glUniform3f(uLight, -0.35f, 0.90f, -0.22f);
@@ -323,6 +323,26 @@ public final class PulseHockey3DView extends GLSurfaceView {
             drawCylinder(state.puckX, 0.23f, state.puckZ, 0.47f, 0.22f, PUCK);
 
             if (aiming && aimPlayer != PulseHockeyGame.Player.NONE) drawAim();
+        }
+
+        private void updateCamera() {
+            PulseHockeyCameraRig.Frame target = PulseHockeyCameraRig.plan(
+                    surfaceAspect,
+                    state.puckX, state.puckZ,
+                    state.sunX, state.sunZ,
+                    state.moonX, state.moonZ);
+            cameraFrame = PulseHockeyCameraRig.blend(cameraFrame, target);
+
+            Matrix.perspectiveM(projection, 0, cameraFrame.fovY, surfaceAspect, 1f, 90f);
+            Matrix.setLookAtM(view, 0,
+                    cameraFrame.focusX,
+                    cameraFrame.eyeHeight,
+                    cameraFrame.focusZ - PulseHockeyCameraRig.EYE_BACK_DISTANCE,
+                    cameraFrame.focusX,
+                    0f,
+                    cameraFrame.focusZ + PulseHockeyCameraRig.LOOK_AHEAD_Z,
+                    0f, 1f, 0f);
+            Matrix.multiplyMM(pv, 0, projection, 0, view, 0);
         }
 
         private void drawEndWalls(float z, float goalHalfWidth) {
