@@ -36,5 +36,7 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeNetworkStateCodec.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeBluetoothProtocol.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeBluetoothSession.java \
-            android-smoke/game-tests/RelaySiegeBluetoothSessionSmoke.java
+            android-smoke/game-tests/RelaySiegeBluetoothSessionSmoke.java \
+            android-smoke/game-tests/RelaySiegeBluetoothInterruptedAckSmoke.java
           java -cp /tmp/relay-siege-bt com.hoonex.solarnet.gridduel.RelaySiegeBluetoothSessionSmoke
+          java -cp /tmp/relay-siege-bt com.hoonex.solarnet.gridduel.RelaySiegeBluetoothInterruptedAckSmoke
