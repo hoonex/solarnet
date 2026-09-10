@@ -1,63 +1,50 @@
-name: CI
+name: Nightshift CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  core:
+  authority:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-java@v4
         with:
-          dotnet-version: '8.0.x'
-      - name: Build SolarNet core
-        run: dotnet build src/SolarNet.Core/SolarNet.Core.csproj --configuration Release --nologo
-      - name: Compile Unity Android C# bridge surface
-        run: dotnet build tests/SolarNet.UnityAndroidCompile/SolarNet.UnityAndroidCompile.csproj --configuration Release --nologo
-      - name: Compile Grid Duel Unity sample surface
-        run: dotnet build tests/SolarNet.GridDuel.UnityCompile/SolarNet.GridDuel.UnityCompile.csproj --configuration Release --nologo
-      - name: Run multiplayer smoke tests
-        run: dotnet run --project tests/SolarNet.Core.SmokeTests/SolarNet.Core.SmokeTests.csproj --configuration Release --nologo
-      - name: Run state-integrity smoke tests
-        run: dotnet run --project tests/SolarNet.StateIntegrity.SmokeTests/SolarNet.StateIntegrity.SmokeTests.csproj --configuration Release --nologo
-      - name: Run replication acknowledgement tests
-        run: dotnet run --project tests/SolarNet.ReplicationAck.SmokeTests/SolarNet.ReplicationAck.SmokeTests.csproj --configuration Release --nologo
-      - name: Run designated-replica durability barrier tests
-        run: dotnet run --project tests/SolarNet.DurabilityBarrier.SmokeTests/SolarNet.DurabilityBarrier.SmokeTests.csproj --configuration Release --nologo
-      - name: Run deterministic chaos soak
-        run: dotnet run --project tests/SolarNet.ChaosSoak.SmokeTests/SolarNet.ChaosSoak.SmokeTests.csproj --configuration Release --nologo
-      - name: Run client process-resume tests
-        run: dotnet run --project tests/SolarNet.ProcessResume.SmokeTests/SolarNet.ProcessResume.SmokeTests.csproj --configuration Release --nologo
-      - name: Run authority epoch process-resume tests
-        run: dotnet run --project tests/SolarNet.AuthorityEpochResume.SmokeTests/SolarNet.AuthorityEpochResume.SmokeTests.csproj --configuration Release --nologo
-      - name: Run authority-checkpoint promotion tests
-        run: dotnet run --project tests/SolarNet.AuthorityCheckpoint.SmokeTests/SolarNet.AuthorityCheckpoint.SmokeTests.csproj --configuration Release --nologo
-      - name: Run host-migration planner tests
-        run: dotnet run --project tests/SolarNet.HostMigrationPlanner.SmokeTests/SolarNet.HostMigrationPlanner.SmokeTests.csproj --configuration Release --nologo
-      - name: Run migration orchestration tests
-        run: dotnet run --project tests/SolarNet.MigrationOrchestration.SmokeTests/SolarNet.MigrationOrchestration.SmokeTests.csproj --configuration Release --nologo
-      - name: Run Grid Duel host-migration tests
-        run: dotnet run --project tests/SolarNet.GridDuelMigration.SmokeTests/SolarNet.GridDuelMigration.SmokeTests.csproj --configuration Release --nologo
-      - name: Run room-lifecycle smoke tests
-        run: dotnet run --project tests/SolarNet.Room.SmokeTests/SolarNet.Room.SmokeTests.csproj --configuration Release --nologo
-      - name: Run Bluetooth Classic smoke tests
-        run: dotnet run --project tests/SolarNet.BluetoothClassic.SmokeTests/SolarNet.BluetoothClassic.SmokeTests.csproj --configuration Release --nologo
-      - name: Run Grid Duel integration tests
-        run: dotnet run --project tests/SolarNet.GridDuel.SmokeTests/SolarNet.GridDuel.SmokeTests.csproj --configuration Release --nologo
+          distribution: temurin
+          java-version: '17'
+      - name: Compile shared rules, protocol, server and smoke tests
+        run: |
+          rm -rf /tmp/nightshift-classes && mkdir -p /tmp/nightshift-classes
+          javac --release 17 -d /tmp/nightshift-classes \
+            $(find shared/src/main/java server/src/main/java tests -name '*.java' -print)
+      - name: Run game simulation smoke
+        run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.GameSimulationSmoke
+      - name: Run binary protocol smoke
+        run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.ProtocolSmoke
+      - name: Run real two-client authority smoke
+        run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.NightshiftServerSmoke
+      - name: Package authority server jar
+        run: |
+          printf 'Main-Class: com.hoonex.nightshift.server.NightshiftServer\n' > /tmp/nightshift-manifest.mf
+          jar cfm nightshift-server.jar /tmp/nightshift-manifest.mf -C /tmp/nightshift-classes .
+          sha256sum nightshift-server.jar > nightshift-server.jar.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightshift-authority-server
+          path: |
+            nightshift-server.jar
+            nightshift-server.jar.sha256
+          retention-days: 14
 
-  android-transports:
+  android:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      SOLARNET_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -69,123 +56,32 @@ jobs:
           gradle-version: '8.13'
       - name: Ensure Android 36 SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
-      - name: Run probe soak statistics smoke test
+      - name: Build Nightshift Android APK
+        run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify Nightshift 0.1.0 identity and no Bluetooth permissions
         run: |
-          rm -rf /tmp/solarnet-probe-stats && mkdir -p /tmp/solarnet-probe-stats
-          javac -d /tmp/solarnet-probe-stats \
-            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeSoakStats.java \
-            android-smoke/probe-tests/ProbeSoakStatsSmoke.java
-          java -cp /tmp/solarnet-probe-stats com.hoonex.solarnet.probe.ProbeSoakStatsSmoke
-      - name: Run probe evidence envelope smoke test
-        run: |
-          rm -rf /tmp/solarnet-probe-evidence && mkdir -p /tmp/solarnet-probe-evidence
-          javac -d /tmp/solarnet-probe-evidence \
-            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceSnapshot.java \
-            android-smoke/probe-app/src/main/java/com/hoonex/solarnet/probe/ProbeEvidenceEnvelope.java \
-            android-smoke/probe-tests/ProbeEvidenceSnapshotSmoke.java
-          java -cp /tmp/solarnet-probe-evidence com.hoonex.solarnet.probe.ProbeEvidenceSnapshotSmoke
-      - name: Run Grid Duel Android game logic smoke test
-        run: |
-          rm -rf /tmp/grid-duel-game && mkdir -p /tmp/grid-duel-game
-          javac -d /tmp/grid-duel-game \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/GridDuelGame.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/GameProtocol.java \
-            android-smoke/game-tests/GridDuelGameSmoke.java
-          java -cp /tmp/grid-duel-game com.hoonex.solarnet.gridduel.GridDuelGameSmoke
-      - name: Run Pulse Hockey rules, AI, fairness and overview-camera smoke test
-        run: |
-          rm -rf /tmp/pulse-hockey && mkdir -p /tmp/pulse-hockey
-          javac -d /tmp/pulse-hockey \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyGame.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyAi.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyCameraRig.java \
-            android-smoke/game-tests/PulseHockeyGameSmoke.java \
-            android-smoke/game-tests/PulseHockeyCameraRigSmoke.java
-          java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyGameSmoke
-          java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyCameraRigSmoke
-      - name: Run Relay Siege combat, guide, AI, Deck Lab, Tactical Trainer and Cycle Lab smoke tests
-        run: |
-          rm -rf /tmp/relay-siege && mkdir -p /tmp/relay-siege
-          javac -d /tmp/relay-siege \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCards.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeGame.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckGuide.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeAi.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckLab.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalTrainer.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalReplay.java \
-            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCycleLab.java \
-            android-smoke/game-tests/RelaySiegeGameSmoke.java \
-            android-smoke/game-tests/RelaySiegeAiSmoke.java \
-            android-smoke/game-tests/RelaySiegeDeckLabSmoke.java \
-            android-smoke/game-tests/RelaySiegeTacticalTrainerSmoke.java \
-            android-smoke/game-tests/RelaySiegeTacticalReplaySmoke.java \
-            android-smoke/game-tests/RelaySiegeCycleLabSmoke.java
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeGameSmoke
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeAiSmoke
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeDeckLabSmoke
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeTacticalTrainerSmoke
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeTacticalReplaySmoke
-          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeCycleLabSmoke
-      - name: Compile Nearby Android library
-        run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
-      - name: Compile Bluetooth Classic Android library
-        run: gradle -p android-smoke :solarnet-bluetooth-classic:assembleDebug --no-daemon --stacktrace
-      - name: Build physical transport probe APK
-        run: gradle -p android-smoke :probe-app:assembleDebug --no-daemon --stacktrace
-      - name: Verify Probe 0.4.0 build identity and radio manifest
-        run: |
-          APK="android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk"
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          "$AAPT" dump badging "$APK" | tee /tmp/probe-badging.txt
-          grep -Fq "versionCode='4'" /tmp/probe-badging.txt
-          grep -Fq "versionName='0.4.0'" /tmp/probe-badging.txt
-          grep -Fq "sdkVersion:'24'" /tmp/probe-badging.txt
-          BUILD_CONFIG=$(find android-smoke/probe-app/build/generated/source/buildConfig/debug -name BuildConfig.java -print -quit)
-          test -n "$BUILD_CONFIG"
-          grep -Fq "SOURCE_SHA = \"${SOLARNET_SOURCE_SHA}\"" "$BUILD_CONFIG"
-          "$AAPT" dump permissions "$APK" | tee /tmp/probe-permissions.txt
-          grep -Fq 'android.permission.BLUETOOTH_ADVERTISE' /tmp/probe-permissions.txt
-          grep -Fq 'android.permission.BLUETOOTH_CONNECT' /tmp/probe-permissions.txt
-          grep -Fq 'android.permission.BLUETOOTH_SCAN' /tmp/probe-permissions.txt
-          grep -Fq 'android.permission.NEARBY_WIFI_DEVICES' /tmp/probe-permissions.txt
-      - name: Write probe checksum
+          "$AAPT" dump badging "$APK" | tee /tmp/nightshift-badging.txt
+          grep -Fq "package: name='com.hoonex.nightshift' versionCode='1' versionName='0.1.0'" /tmp/nightshift-badging.txt
+          grep -Fq "sdkVersion:'24'" /tmp/nightshift-badging.txt
+          grep -Fq "application-label:'Nightshift'" /tmp/nightshift-badging.txt
+          "$AAPT" dump permissions "$APK" | tee /tmp/nightshift-permissions.txt
+          grep -Fq 'android.permission.INTERNET' /tmp/nightshift-permissions.txt
+          if grep -Fq 'android.permission.BLUETOOTH' /tmp/nightshift-permissions.txt; then
+            echo 'Bluetooth permission leaked into clean-slate app' >&2
+            exit 1
+          fi
+      - name: Stage APK and checksum
         run: |
-          cd android-smoke/probe-app/build/outputs/apk/debug
-          sha256sum probe-app-debug.apk > probe-app-debug.apk.sha256
-      - name: Upload transport probe APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: solarnet-transport-probe-apk
-          path: |
-            android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk
-            android-smoke/probe-app/build/outputs/apk/debug/probe-app-debug.apk.sha256
-          retention-days: 14
-      - name: Build Solar Arcade Android APK
-        run: gradle -p android-smoke :grid-duel-game:assembleDebug --no-daemon --stacktrace
-      - name: Verify Solar Arcade 0.6.1 APK identity
-        run: |
-          APK="android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk"
-          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          "$AAPT" dump badging "$APK" | tee /tmp/solar-arcade-badging.txt
-          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='7' versionName='0.6.1'" /tmp/solar-arcade-badging.txt
-          grep -Fq "sdkVersion:'24'" /tmp/solar-arcade-badging.txt
-          grep -Fq "application-label:'Solar Arcade'" /tmp/solar-arcade-badging.txt
-          "$AAPT" dump permissions "$APK" | tee /tmp/solar-arcade-permissions.txt
-          grep -Fq 'android.permission.BLUETOOTH_CONNECT' /tmp/solar-arcade-permissions.txt
-          grep -Fq 'android.permission.BLUETOOTH_SCAN' /tmp/solar-arcade-permissions.txt
-          grep -Fq 'android.permission.NEARBY_WIFI_DEVICES' /tmp/solar-arcade-permissions.txt
-      - name: Stage Solar Arcade APK and checksum
-        run: |
-          OUT="android-smoke/grid-duel-game/build/outputs/apk/debug"
-          cp "$OUT/grid-duel-game-debug.apk" "$OUT/solar-arcade-0.6.1-debug.apk"
+          OUT="android/app/build/outputs/apk/debug"
+          cp "$OUT/app-debug.apk" "$OUT/nightshift-0.1.0-debug.apk"
           cd "$OUT"
-          sha256sum solar-arcade-0.6.1-debug.apk > solar-arcade-0.6.1-debug.apk.sha256
-      - name: Upload Solar Arcade APK
-        uses: actions/upload-artifact@v4
+          sha256sum nightshift-0.1.0-debug.apk > nightshift-0.1.0-debug.apk.sha256
+      - uses: actions/upload-artifact@v4
         with:
-          name: solar-arcade-android-game-apk
+          name: nightshift-android-apk
           path: |
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.1-debug.apk
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.1-debug.apk.sha256
+            android/app/build/outputs/apk/debug/nightshift-0.1.0-debug.apk
+            android/app/build/outputs/apk/debug/nightshift-0.1.0-debug.apk.sha256
           retention-days: 14

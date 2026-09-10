@@ -1,0 +1,28 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.hoonex.nightshift'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.hoonex.nightshift'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    sourceSets {
+        main.java.srcDirs += file('../../shared/src/main/java')
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.3'
+}
