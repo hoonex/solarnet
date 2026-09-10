@@ -18,6 +18,14 @@
         android:label="Solar Arcade"
         android:theme="@style/GridDuelTheme">
         <activity
+            android:name=".RelaySiegeBluetoothActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
+            android:name=".RelaySiegeHubActivity"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+        <activity
             android:name=".RelaySiegeActivity"
             android:screenOrientation="portrait"
             android:exported="false" />
