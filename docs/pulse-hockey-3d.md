@@ -72,9 +72,25 @@ Rendered objects include:
 
 This is actual 3D geometry, not a 2D Canvas transformed to resemble perspective.
 
+### Overview follow camera — Solar Arcade 0.6.1
+
+The original renderer used one fixed 48-degree perspective camera at `(0, 13.4, -16.2)`. On a portrait phone that produced a narrow horizontal field of view and could make the rink feel unnecessarily close.
+
+0.6.1 moves camera composition into `PulseHockeyCameraRig`:
+
+- vertical FOV is widened to 58 degrees;
+- eye height is fitted from the full rink width and length before any action following is applied;
+- the puck leads a bounded focus target while both mallets anchor the composition;
+- focus movement is clamped so the camera follows play without chasing one object off-center;
+- action near a goal or side wall increases eye height, producing extra zoom-out instead of a close-up;
+- focus and zoom move through a low-pass blend to avoid camera snaps;
+- very narrow portrait aspect ratios receive at least as much overview distance as wider portrait screens.
+
+The pure-Java camera smoke test locks these composition rules and verifies conservative rink-width/rink-length coverage calculations. It does not substitute for visual inspection on a physical phone.
+
 ## Current play modes
 
-Pulse Hockey 3D 0.2.0 intentionally ships with:
+Pulse Hockey 3D intentionally ships with:
 
 - AI Battle;
 - same-phone Local 2P.
@@ -83,7 +99,7 @@ Bluetooth/Nearby are not copied over merely to increase the mode count. Grid Due
 
 ## CI acceptance checks
 
-The pure-Java game smoke tests require:
+The pure-Java game and camera smoke tests require:
 
 - an all-defense match terminates at exactly the hard turn cap;
 - both sides receive opening initiative across seeded matches;
@@ -93,10 +109,14 @@ The pure-Java game smoke tests require:
 - enough matches are decisive to measure initiative;
 - the opening player does not exceed 75% of decisive wins in the checked sample;
 - both SUN and MOON can win;
-- AI does not collapse into mostly draws.
+- AI does not collapse into mostly draws;
+- portrait camera framing retains conservative full-rink width and length margins;
+- camera focus follows either end of the rink but remains bounded;
+- edge action increases zoom-out distance;
+- follow and zoom transitions do not snap directly to the target.
 
-The Android job then compiles the OpenGL/game activities, verifies Solar Arcade 0.2.0 package identity, computes a SHA-256 digest, and uploads the debug APK artifact.
+The Android job then compiles the OpenGL/game activities, verifies Solar Arcade 0.6.1 package identity, computes a SHA-256 digest, and uploads the debug APK artifact.
 
 ## Evidence boundary
 
-CI can prove deterministic rule tests, source compilation, Android packaging, application metadata and artifact generation. It does **not** prove real-phone touch ergonomics, OpenGL appearance, frame pacing, thermal behavior, power draw or OEM-specific runtime behavior. Those remain device-runtime evidence and must be reported separately after physical testing.
+CI can prove deterministic rule tests, deterministic camera-policy tests, source compilation, Android packaging, application metadata and artifact generation. It does **not** prove real-phone touch ergonomics, OpenGL appearance, frame pacing, thermal behavior, power draw or OEM-specific runtime behavior. Those remain device-runtime evidence and must be reported separately after physical testing.

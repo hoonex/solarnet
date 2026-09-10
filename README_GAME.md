@@ -13,7 +13,7 @@ An original real-time two-lane deck strategy game built around card rotation, Fl
 - guide examples replayed by the real combat engine
 - AI practice arena
 
-### Cycle Lab — Solar Arcade 0.6.0
+### Cycle Lab — Solar Arcade 0.6.0+
 
 Cycle Lab makes exact hand order and resource timing visible instead of reducing cycle to one average number.
 
@@ -67,6 +67,8 @@ A real OpenGL ES 3D turn-based air-hockey / tactics hybrid.
 - escalating Overdrive goal width and shot speed
 - hard 36-turn cap so avoidance cannot create an infinite match
 - CI AI-vs-AI checks for termination, decisive games and opening-player bias
+- **0.6.1 overview camera:** wider 58° FOV, rink-fit minimum distance, bounded puck-led action following, edge-triggered extra zoom-out and smoothed camera motion
+- camera-policy CI checks keep narrow portrait framing from regressing back to the old close fixed view
 
 ## 00 — Grid Duel Classic
 
@@ -78,6 +80,6 @@ CI produces the installable debug artifact:
 
 `solar-arcade-android-game-apk`
 
-Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.6.0 uses versionCode 6.
+Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.6.1 uses versionCode 7.
 
-CI proves source-level game tests, Tactical Trainer outcome/replay agreement, Cycle Lab exact-hand invariants, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.
+CI proves source-level game tests, Pulse Hockey camera-policy invariants, Tactical Trainer outcome/replay agreement, Cycle Lab exact-hand invariants, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.

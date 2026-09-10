@@ -92,14 +92,17 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/GameProtocol.java \
             android-smoke/game-tests/GridDuelGameSmoke.java
           java -cp /tmp/grid-duel-game com.hoonex.solarnet.gridduel.GridDuelGameSmoke
-      - name: Run Pulse Hockey rules, AI and fairness smoke test
+      - name: Run Pulse Hockey rules, AI, fairness and overview-camera smoke test
         run: |
           rm -rf /tmp/pulse-hockey && mkdir -p /tmp/pulse-hockey
           javac -d /tmp/pulse-hockey \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyGame.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyAi.java \
-            android-smoke/game-tests/PulseHockeyGameSmoke.java
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyCameraRig.java \
+            android-smoke/game-tests/PulseHockeyGameSmoke.java \
+            android-smoke/game-tests/PulseHockeyCameraRigSmoke.java
           java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyGameSmoke
+          java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyCameraRigSmoke
       - name: Run Relay Siege combat, guide, AI, Deck Lab, Tactical Trainer and Cycle Lab smoke tests
         run: |
           rm -rf /tmp/relay-siege && mkdir -p /tmp/relay-siege
@@ -160,12 +163,12 @@ jobs:
           retention-days: 14
       - name: Build Solar Arcade Android APK
         run: gradle -p android-smoke :grid-duel-game:assembleDebug --no-daemon --stacktrace
-      - name: Verify Solar Arcade 0.6.0 APK identity
+      - name: Verify Solar Arcade 0.6.1 APK identity
         run: |
           APK="android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           "$AAPT" dump badging "$APK" | tee /tmp/solar-arcade-badging.txt
-          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='6' versionName='0.6.0'" /tmp/solar-arcade-badging.txt
+          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='7' versionName='0.6.1'" /tmp/solar-arcade-badging.txt
           grep -Fq "sdkVersion:'24'" /tmp/solar-arcade-badging.txt
           grep -Fq "application-label:'Solar Arcade'" /tmp/solar-arcade-badging.txt
           "$AAPT" dump permissions "$APK" | tee /tmp/solar-arcade-permissions.txt
@@ -175,14 +178,14 @@ jobs:
       - name: Stage Solar Arcade APK and checksum
         run: |
           OUT="android-smoke/grid-duel-game/build/outputs/apk/debug"
-          cp "$OUT/grid-duel-game-debug.apk" "$OUT/solar-arcade-0.6.0-debug.apk"
+          cp "$OUT/grid-duel-game-debug.apk" "$OUT/solar-arcade-0.6.1-debug.apk"
           cd "$OUT"
-          sha256sum solar-arcade-0.6.0-debug.apk > solar-arcade-0.6.0-debug.apk.sha256
+          sha256sum solar-arcade-0.6.1-debug.apk > solar-arcade-0.6.1-debug.apk.sha256
       - name: Upload Solar Arcade APK
         uses: actions/upload-artifact@v4
         with:
           name: solar-arcade-android-game-apk
           path: |
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.0-debug.apk
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.0-debug.apk.sha256
+            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.1-debug.apk
+            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.1-debug.apk.sha256
           retention-days: 14
