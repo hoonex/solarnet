@@ -12,6 +12,10 @@ public final class FacilityMap {
         new Vec2(-1.8, -15.3), new Vec2(1.8, -15.3),
         new Vec2(-1.8, -12.8), new Vec2(1.8, -12.8)
     };
+    public static final Vec2[] FUSES = {
+        new Vec2(-8.4, -12.2), new Vec2(8.2, -5.4), new Vec2(4.9, 11.8)
+    };
+    public static final Vec2 KEYCARD = new Vec2(9.4, 4.8);
     public static final Vec2[] BREAKERS = {
         new Vec2(-8.3, -6.2), new Vec2(7.6, 2.1), new Vec2(-4.5, 12.2)
     };

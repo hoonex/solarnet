@@ -2,42 +2,43 @@
 
 ## Product thesis
 
-Nightshift is a compact co-op horror game built around **shared information, noisy movement, and rescue pressure**, not combat. The monster is not a damage sponge and players do not win by shooting it. The team wins by completing a small number of risky objectives while preserving enough mobility to extract.
+Nightshift is a compact co-op horror game built around **shared information, noisy movement, resource transport, and rescue pressure**, not combat. The hunter is not a damage sponge and players do not win by shooting it.
 
 ## Round structure
 
-- Players: 1–4; co-op is the primary target, solo remains a debug/playable path.
-- Session target: 8–15 minutes once content pacing exists.
+- Players: 1–4.
+- Target session: 8–15 minutes once authored content is mature.
 - Phase: lobby → playing → won/lost.
-- Primary objective: restore 3 breakers.
-- Extraction: breaker completion unlocks the north exit; each survivor must interact at extraction.
-- Downed state: hunter contact downs a player. A teammate holding USE nearby for 2 seconds revives them.
-- Failure: all remaining players are downed before anyone extracts.
-- Partial survival: if no active players remain but at least one already extracted, the session resolves as a win with casualties.
+- Three fuse pickups exist in separated facility zones.
+- A player may carry one fuse at a time.
+- Each breaker consumes one carried fuse.
+- A shared security keycard must also be recovered.
+- Extraction unlocks only after all three breakers are powered **and** the keycard is recovered.
+- Hunter contact downs a player; teammate USE for 2 seconds revives.
+- If no active players remain and nobody escaped, the session is lost. If at least one player already escaped, it resolves as a win with casualties.
+
+## Horror pacing
+
+`HorrorDirector` is deterministic and authority-owned.
+
+- First blackout begins 18 seconds after actual match play starts.
+- Blackouts repeat every 26 seconds and last 3.5 seconds.
+- Restoring a breaker creates a six-second hunt surge.
+- Powered breakers and active horror beats raise threat.
+- Higher threat increases hunter movement/hearing; blackout reduces vision but increases hearing pressure.
+
+This is intentionally server state, not random client-only effects, so every player shares the same beat.
 
 ## Player verbs
 
-- Walk: low noise, sustainable.
-- Sprint: higher speed, drains stamina, creates a large hearing cue.
-- Look: client camera orientation; yaw is included in authoritative movement input.
-- Flashlight: desired on/off state is sent as input; battery is server-owned.
-- Interact: breaker activation, revive and extraction use the same contextual verb.
+Walk, sprint, look, flashlight, and contextual USE remain the complete control surface. USE handles fuse pickup, keycard recovery, breaker insertion, revive, and extraction.
 
-## Hunter behavior
+## Hunter
 
-The hunter is fully authoritative and uses four states:
+The hunter remains server-authoritative with `ROAM`, `INVESTIGATE`, `CHASE`, and `SEARCH`. It reacts to line of sight, sprint noise, interaction noise, objective progression, blackout state, and breaker surges.
 
-1. `ROAM` — patrol fixed facility anchors.
-2. `INVESTIGATE` — move toward recent sprint/interaction noise.
-3. `CHASE` — pursue a currently detected player; flashlight extends detection distance.
-4. `SEARCH` — probe around the last known position before returning to patrol.
+## Presentation contract
 
-The client receives hunter state for presentation but cannot choose targets, attacks or movement.
+The Android vertical slice uses simple procedural geometry but now expresses gameplay state through directional flashlight illumination, fog falloff, emergency lighting, visible objectives, breaker power state, extraction lock state, teammate fuse carry state, and hunter chase emphasis.
 
-## Facility v0.1
-
-The facility is represented on the X/Z plane and rendered in first person. Shared geometry defines the same bounds and blocking walls for simulation and Android presentation. Three breaker anchors are deliberately separated across the map; extraction is placed beyond the last traversal zone.
-
-## Deliberate omissions from v0.1
-
-No weapons, inventory loot table, procedural map, voice chat, cosmetics, account system, monetization, persistence, skill progression or anti-cheat telemetry. These are excluded so the first milestone can prove the one thing the old project did not have: a coherent horror-game loop with a single multiplayer authority model.
+Authored mesh, shadows, animation and spatial audio remain future presentation work. Build success is not evidence of final visual or device quality.

@@ -2,13 +2,14 @@ package com.hoonex.nightshift.net;
 
 import com.hoonex.nightshift.core.GameInput;
 import com.hoonex.nightshift.core.GameSnapshot;
+import com.hoonex.nightshift.core.FacilityMap;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public final class Protocol {
     public static final int MAGIC=0x4E534831;
-    public static final int VERSION=2;
+    public static final int VERSION=3;
     public static final int MAX_FRAME_BYTES=32*1024;
 
     public enum Type {
@@ -93,10 +94,13 @@ public final class Protocol {
         for(GameSnapshot.PlayerView p:s.players){
             out.writeInt(p.id);writeString(out,p.name);out.writeFloat((float)p.x);out.writeFloat((float)p.z);out.writeFloat((float)p.yawRadians);
             out.writeFloat((float)p.stamina);out.writeFloat((float)p.flashlightBattery);out.writeFloat((float)p.tension);out.writeInt(p.lastInputSequence);
-            int flags=(p.flashlightOn?1:0)|(p.downed?2:0)|(p.escaped?4:0)|(p.ready?8:0);out.writeByte(flags);
+            int flags=(p.flashlightOn?1:0)|(p.downed?2:0)|(p.escaped?4:0)|(p.ready?8:0)|(p.carryingFuse?16:0);out.writeByte(flags);
         }
         out.writeFloat((float)s.monster.x);out.writeFloat((float)s.monster.z);out.writeByte(s.monster.mode.ordinal());out.writeInt(s.monster.targetPlayerId);
-        out.writeByte(s.breakers.length);for(boolean breaker:s.breakers)out.writeBoolean(breaker);out.writeBoolean(s.exitUnlocked);
+        out.writeByte(s.breakers.length);for(boolean breaker:s.breakers)out.writeBoolean(breaker);
+        out.writeByte(s.fusesTaken.length);for(boolean taken:s.fusesTaken)out.writeBoolean(taken);
+        int worldFlags=(s.keycardRecovered?1:0)|(s.exitUnlocked?2:0)|(s.blackout?4:0);out.writeByte(worldFlags);
+        out.writeByte(s.threatLevel);out.writeShort(Math.min(0xFFFF,s.huntSurgeTicks));
     }
 
     private static GameSnapshot readSnapshot(DataInputStream in)throws IOException{
@@ -106,13 +110,19 @@ public final class Protocol {
         for(int i=0;i<count;i++){
             int id=in.readInt();String name=readString(in);double x=in.readFloat(),z=in.readFloat(),yaw=in.readFloat();
             double stamina=in.readFloat(),battery=in.readFloat(),tension=in.readFloat();int ack=in.readInt(),flags=in.readUnsignedByte();
-            players.add(new GameSnapshot.PlayerView(id,name,x,z,yaw,stamina,battery,tension,(flags&1)!=0,(flags&2)!=0,(flags&4)!=0,(flags&8)!=0,ack));
+            players.add(new GameSnapshot.PlayerView(id,name,x,z,yaw,stamina,battery,tension,
+                (flags&1)!=0,(flags&2)!=0,(flags&4)!=0,(flags&8)!=0,(flags&16)!=0,ack));
         }
         double mx=in.readFloat(),mz=in.readFloat();int modeIndex=in.readUnsignedByte();if(modeIndex>=GameSnapshot.MonsterMode.values().length)throw new IOException("bad monster mode");
         int target=in.readInt(),breakerCount=in.readUnsignedByte();if(breakerCount>16)throw new IOException("bad breaker count");
         boolean[] breakers=new boolean[breakerCount];for(int i=0;i<breakerCount;i++)breakers[i]=in.readBoolean();
+        int fuseCount=in.readUnsignedByte();if(fuseCount>16)throw new IOException("bad fuse count");
+        boolean[] fuses=new boolean[fuseCount];for(int i=0;i<fuseCount;i++)fuses[i]=in.readBoolean();
+        int worldFlags=in.readUnsignedByte();int threat=in.readUnsignedByte();int surge=in.readUnsignedShort();
+        if(breakerCount!=FacilityMap.BREAKERS.length||fuseCount!=FacilityMap.FUSES.length)throw new IOException("objective layout mismatch");
         return new GameSnapshot(tick,GameSnapshot.Phase.values()[phaseIndex],leader,players,
-            new GameSnapshot.MonsterView(mx,mz,GameSnapshot.MonsterMode.values()[modeIndex],target),breakers,in.readBoolean());
+            new GameSnapshot.MonsterView(mx,mz,GameSnapshot.MonsterMode.values()[modeIndex],target),
+            breakers,fuses,(worldFlags&1)!=0,(worldFlags&2)!=0,(worldFlags&4)!=0,threat,surge);
     }
 
     private static void writeRoom(DataOutputStream out,String room)throws IOException{
