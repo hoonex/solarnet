@@ -135,9 +135,9 @@ public final class RelaySiegeTacticalTrainer {
                     "MOON Siege Walker가 오른쪽 Relay로 직행 중입니다. Walker는 일반 유닛을 무시하고 구조물만 노립니다.",
                     "beacon_pull",
                     430,
-                    choice("beacon_pull", "Relay Beacon을 안쪽에 배치", "relay_beacon", RelaySiegeGame.Lane.RIGHT, 33_000,
+                    choice("beacon_pull", "Relay Beacon을 뒤쪽에 배치해 Walker를 되돌리기", "relay_beacon", RelaySiegeGame.Lane.RIGHT, 27_000,
                             "Walker의 구조물 타겟을 Beacon으로 바꿔 Relay가 공격할 시간을 번다."),
-                    choice("duelist_body", "Duelist로 앞을 막기", "duelist", RelaySiegeGame.Lane.RIGHT, 32_000,
+                    choice("duelist_body", "Duelist로 급히 때려잡기", "duelist", RelaySiegeGame.Lane.RIGHT, 24_000,
                             "높은 단일 DPS로 정면에서 처리한다."),
                     waitChoice("wait", "Flux를 아끼고 기다리기", "아무것도 쓰지 않고 Relay 화력에 맡긴다.")),
             new Lesson(
@@ -157,7 +157,7 @@ public final class RelaySiegeTacticalTrainer {
                     "survivor_conversion",
                     "방어에 성공한 유닛의 남은 체력은 이미 지불한 공격 자원",
                     "DEFENSE → COUNTERPUSH",
-                    "방어를 끝낸 SUN Pulse Guard와 Arc Slinger가 오른쪽 중앙을 넘어 살아 있습니다. 지금 추가 Flux를 어디에 쓰느냐가 역공 크기를 결정합니다.",
+                    "방어를 끝낸 SUN Pulse Guard와 Arc Slinger가 오른쪽 중앙을 넘어 살아 있습니다. 반대쪽은 MOON Coil Turret이 이미 지키고 있어 새 Runner만 던지면 효율이 낮습니다.",
                     "overclock_survivors",
                     330,
                     choice("overclock_survivors", "생존 유닛에 Overclock", "overclock", RelaySiegeGame.Lane.RIGHT, 57_000,
@@ -216,7 +216,7 @@ public final class RelaySiegeTacticalTrainer {
             RelaySiegeGame game = new RelaySiegeGame(
                     RelaySiegeCards.deck("counterforge"), RelaySiegeCards.deck("spark_cycle"), 28001L);
             game.scenarioSetFlux(RelaySiegeGame.Player.SUN, 10_000);
-            game.scenarioSpawn("siege_walker", RelaySiegeGame.Player.MOON, RelaySiegeGame.Lane.RIGHT, 50_000);
+            game.scenarioSpawn("siege_walker", RelaySiegeGame.Player.MOON, RelaySiegeGame.Lane.RIGHT, 21_000);
             return game;
         }
         if ("splash_vs_swarm".equals(lessonId)) {
@@ -238,6 +238,7 @@ public final class RelaySiegeTacticalTrainer {
             game.scenarioSetFlux(RelaySiegeGame.Player.SUN, 10_000);
             game.scenarioSpawn("pulse_guard", RelaySiegeGame.Player.SUN, RelaySiegeGame.Lane.RIGHT, 55_000);
             game.scenarioSpawn("arc_slinger", RelaySiegeGame.Player.SUN, RelaySiegeGame.Lane.RIGHT, 51_000);
+            game.scenarioSpawn("coil_turret", RelaySiegeGame.Player.MOON, RelaySiegeGame.Lane.LEFT, 52_000);
             return game;
         }
         throw new IllegalArgumentException("Unknown tactical scenario: " + lessonId);
