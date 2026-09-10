@@ -1,0 +1,28 @@
+name: Bluetooth FIFO
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  fifo-ordering:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prove per-connection send FIFO
+        run: |
+          rm -rf /tmp/solarnet-bt-fifo && mkdir -p /tmp/solarnet-bt-fifo
+          javac -d /tmp/solarnet-bt-fifo \
+            Packages/com.hoonex.solarnet/Plugins/Android/SolarNetBluetoothClassic.androidlib/src/main/java/com/hoonex/solarnet/bluetoothclassic/SolarSerialTaskQueue.java \
+            android-smoke/probe-tests/SolarSerialTaskQueueSmoke.java
+          java -cp /tmp/solarnet-bt-fifo com.hoonex.solarnet.bluetoothclassic.SolarSerialTaskQueueSmoke
