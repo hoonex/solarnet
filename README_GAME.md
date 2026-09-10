@@ -13,7 +13,20 @@ An original real-time two-lane deck strategy game built around card rotation, Fl
 - guide examples replayed by the real combat engine
 - AI practice arena
 
-### Deck Lab — Solar Arcade 0.4.0
+### Tactical Trainer — Solar Arcade 0.5.0
+
+Tactical Trainer turns deck-guide advice into measured decisions instead of static tips.
+
+- every lesson starts from one canonical battlefield and deterministic seed
+- 3+ choices per lesson, including WAIT when strategically meaningful
+- every choice is replayed by the real `RelaySiegeGame`
+- results compare own Relay damage, enemy Relay damage, surviving friendly HP, remaining enemy threat, Flux spent and a lesson-specific trade score
+- the teaching answer is CI-locked to the choice that actually wins under current engine rules
+- the Android UI hides future results before the choice, then lets the player switch between their replay and the best-line replay
+- replay final state is digest-locked to the state used by the trainer score, preventing guide animation from drifting away from gameplay
+- initial lessons teach structure-target building pulls, splash-positive swarm defense, survivor-to-counterpush conversion, and the opposite decision when an undefended second lane makes a cheap split push more valuable than stacking the existing counterpush
+
+### Deck Lab — Solar Arcade 0.4.0+
 
 Deck Lab turns Relay Siege from fixed starter decks into a deck-building system.
 
@@ -51,6 +64,6 @@ CI produces the installable debug artifact:
 
 `solar-arcade-android-game-apk`
 
-Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.4.0 uses versionCode 4.
+Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.5.0 uses versionCode 5.
 
-CI proves source-level game tests, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.
+CI proves source-level game tests, Tactical Trainer outcome/replay agreement, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.

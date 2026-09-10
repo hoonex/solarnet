@@ -1,0 +1,35 @@
+name: Relay Siege Tactical Trainer
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  trainer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile and run Tactical Trainer real-engine lessons
+        run: |
+          rm -rf /tmp/relay-trainer && mkdir -p /tmp/relay-trainer
+          javac -d /tmp/relay-trainer \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCards.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeGame.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckGuide.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeAi.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalTrainer.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalReplay.java \
+            android-smoke/game-tests/RelaySiegeTacticalTrainerSmoke.java \
+            android-smoke/game-tests/RelaySiegeTacticalReplaySmoke.java
+          java -cp /tmp/relay-trainer com.hoonex.solarnet.gridduel.RelaySiegeTacticalTrainerSmoke
+          java -cp /tmp/relay-trainer com.hoonex.solarnet.gridduel.RelaySiegeTacticalReplaySmoke
