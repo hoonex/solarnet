@@ -1,4 +1,4 @@
-name: Bluetooth FIFO
+name: Relay Siege Bluetooth
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  fifo-ordering:
+  bluetooth-protocol:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,3 +26,15 @@ jobs:
             Packages/com.hoonex.solarnet/Plugins/Android/SolarNetBluetoothClassic.androidlib/src/main/java/com/hoonex/solarnet/bluetoothclassic/SolarSerialTaskQueue.java \
             android-smoke/probe-tests/SolarSerialTaskQueueSmoke.java
           java -cp /tmp/solarnet-bt-fifo com.hoonex.solarnet.bluetoothclassic.SolarSerialTaskQueueSmoke
+      - name: Prove Relay Siege authority, dedup and reconnect
+        run: |
+          rm -rf /tmp/relay-siege-bt && mkdir -p /tmp/relay-siege-bt
+          javac -d /tmp/relay-siege-bt \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCards.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeGame.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeNetworkState.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeNetworkStateCodec.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeBluetoothProtocol.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeBluetoothSession.java \
+            android-smoke/game-tests/RelaySiegeBluetoothSessionSmoke.java
+          java -cp /tmp/relay-siege-bt com.hoonex.solarnet.gridduel.RelaySiegeBluetoothSessionSmoke
