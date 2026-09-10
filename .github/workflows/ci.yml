@@ -25,9 +25,13 @@ jobs:
             $(find shared/src/main/java server/src/main/java tests -name '*.java' -print)
       - name: Run game simulation smoke
         run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.GameSimulationSmoke
-      - name: Run binary protocol smoke
+      - name: Run protocol v2 smoke
         run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.ProtocolSmoke
-      - name: Run real two-client authority smoke
+      - name: Run client prediction and reconciliation smoke
+        run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.ClientPredictionSmoke
+      - name: Run snapshot interpolation smoke
+        run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.SnapshotInterpolatorSmoke
+      - name: Run real two-client reconnect authority smoke
         run: java -cp /tmp/nightshift-classes com.hoonex.nightshift.tests.NightshiftServerSmoke
       - name: Package authority server jar
         run: |
@@ -58,30 +62,30 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
       - name: Build Nightshift Android APK
         run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
-      - name: Verify Nightshift 0.1.0 identity and no Bluetooth permissions
+      - name: Verify Nightshift 0.2.0 identity and no Bluetooth permissions
         run: |
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           "$AAPT" dump badging "$APK" | tee /tmp/nightshift-badging.txt
-          grep -Fq "package: name='com.hoonex.nightshift' versionCode='1' versionName='0.1.0'" /tmp/nightshift-badging.txt
+          grep -Fq "package: name='com.hoonex.nightshift' versionCode='2' versionName='0.2.0'" /tmp/nightshift-badging.txt
           grep -Fq "sdkVersion:'24'" /tmp/nightshift-badging.txt
           grep -Fq "application-label:'Nightshift'" /tmp/nightshift-badging.txt
           "$AAPT" dump permissions "$APK" | tee /tmp/nightshift-permissions.txt
           grep -Fq 'android.permission.INTERNET' /tmp/nightshift-permissions.txt
           if grep -Fq 'android.permission.BLUETOOTH' /tmp/nightshift-permissions.txt; then
-            echo 'Bluetooth permission leaked into clean-slate app' >&2
+            echo 'Bluetooth permission leaked into Nightshift' >&2
             exit 1
           fi
       - name: Stage APK and checksum
         run: |
           OUT="android/app/build/outputs/apk/debug"
-          cp "$OUT/app-debug.apk" "$OUT/nightshift-0.1.0-debug.apk"
+          cp "$OUT/app-debug.apk" "$OUT/nightshift-0.2.0-debug.apk"
           cd "$OUT"
-          sha256sum nightshift-0.1.0-debug.apk > nightshift-0.1.0-debug.apk.sha256
+          sha256sum nightshift-0.2.0-debug.apk > nightshift-0.2.0-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: nightshift-android-apk
           path: |
-            android/app/build/outputs/apk/debug/nightshift-0.1.0-debug.apk
-            android/app/build/outputs/apk/debug/nightshift-0.1.0-debug.apk.sha256
+            android/app/build/outputs/apk/debug/nightshift-0.2.0-debug.apk
+            android/app/build/outputs/apk/debug/nightshift-0.2.0-debug.apk.sha256
           retention-days: 14

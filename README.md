@@ -1,10 +1,10 @@
 # Nightshift
 
-Nightshift is a clean-slate 1–4 player cooperative horror game prototype. The previous Solar Arcade / SolarNet transport demo product has been retired on the reboot branch; the new product has no Bluetooth or Nearby transport path.
+Nightshift is a clean-slate 1–4 player cooperative first-person horror prototype. The retired Solar Arcade / SolarNet Bluetooth/Nearby product paths are not part of the current product.
 
 ## Core loop
 
-1. Join or create a room on a public/LAN Nightshift authority server.
+1. Join or create a room on a Nightshift authority server.
 2. Ready up; the room leader starts the match.
 3. Restore three breaker stations inside a dark facility.
 4. Avoid a server-controlled hunter that reacts to line of sight, sprint noise and interaction noise.
@@ -12,11 +12,15 @@ Nightshift is a clean-slate 1–4 player cooperative horror game prototype. The 
 
 ## Architecture
 
-- `shared/` — authoritative game rules, facility geometry, snapshots and binary protocol. No Android dependency.
-- `server/` — Java 17 TCP authority, room registry, fixed 20 Hz simulation, 10 Hz snapshots.
-- `android/` — Android first-person OpenGL ES client. Sends input only; it does not own monster/objective truth.
-- `tests/` — executable smoke tests for game rules, protocol round-trips and a real localhost two-client server session.
+- `shared/` — game rules, facility geometry, canonical player locomotion, client prediction/interpolation models, snapshots and Protocol v2.
+- `server/` — Java 17 TCP authority, room registry, 20 Hz simulation and 10 Hz snapshots.
+- `android/` — Android first-person OpenGL ES client.
+- `tests/` — rule/protocol/prediction/interpolation and real localhost TCP smoke tests.
 - `docs/` — product, networking and milestone contracts.
+
+Nightshift 0.2.0 keeps game truth on the server while reducing perceived input and snapshot latency. Local movement is predicted with the same locomotion step used by the authority, snapshots acknowledge the last processed input sequence, and unacknowledged inputs are replayed during reconciliation. Remote actors are rendered through a one-snapshot interpolation buffer and are never extrapolated beyond the newest authoritative snapshot.
+
+Transient disconnects reserve the existing player slot for 10 seconds. The Android client performs a bounded reconnect sequence and uses Protocol v2 `RESUME` with the existing room/player/token. An explicit leave still removes the player immediately.
 
 ## Run the authority
 
@@ -28,8 +32,8 @@ jar cfm nightshift-server.jar /tmp/nightshift-manifest.mf -C out .
 java -jar nightshift-server.jar 46000
 ```
 
-The Android client connects to the server host/IP and port. For Internet play, run the authority on a publicly reachable host and expose TCP `46000` (or the chosen port). Production TLS, authentication, matchmaking service and relay fallback are later milestones; v0.1.0 intentionally proves the authoritative game loop before adding infrastructure layers.
+For Internet play, run the authority on a publicly reachable host and expose the chosen TCP port. TLS, authenticated matchmaking, relay fallback and hosted production infrastructure remain later milestones.
 
 ## Evidence boundary
 
-CI can prove Java compilation, deterministic rule/protocol smoke tests, a localhost two-client TCP session, Android compilation, package identity and APK generation. CI does **not** prove physical-device touch feel, rendering comfort, network quality over a real carrier/Wi-Fi path, performance, thermal behavior or battery use.
+CI can prove Java compilation, deterministic rule/protocol/prediction/interpolation tests, localhost TCP create/join/resume behavior, Android compilation, package/permission identity and artifact generation. It does **not** prove real-phone touch/render quality, actual WAN latency/jitter/loss behavior, performance, thermal behavior or battery use.
