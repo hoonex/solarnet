@@ -24,7 +24,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class SolarBluetoothClassicBridge {
     private static final int MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
@@ -35,6 +37,10 @@ public final class SolarBluetoothClassicBridge {
         void onDisconnected(String connectionId);
         void onBytesReceived(String connectionId, byte[] payload);
         void onError(String operation, String message);
+    }
+
+    private interface SendCompletion {
+        void complete(Throwable failure);
     }
 
     private final Object gate = new Object();
@@ -104,32 +110,40 @@ public final class SolarBluetoothClassicBridge {
         });
     }
 
+    /**
+     * Enqueue in caller order. The Connection serial queue guarantees that two application messages
+     * cannot overtake each other just because the shared executor starts their workers out of order.
+     */
     public void sendBytes(final long requestId, final String connectionId, final byte[] payload) {
-        executor.execute(() -> {
-            try {
-                Connection connection;
-                synchronized (gate) { connection = connections.get(connectionId); }
-                if (connection == null) throw new IOException("Unknown Bluetooth connection: " + connectionId);
-                connection.send(payload == null ? new byte[0] : payload);
-                complete(requestId, true, null);
-            } catch (Throwable t) {
-                complete(requestId, false, message(t));
-            }
-        });
+        Connection connection;
+        synchronized (gate) { connection = connections.get(connectionId); }
+        if (connection == null) {
+            executor.execute(() -> complete(requestId, false, "Unknown Bluetooth connection: " + connectionId));
+            return;
+        }
+        connection.enqueueSend(payload, failure ->
+                complete(requestId, failure == null, failure == null ? null : message(failure)));
     }
 
     public void broadcastBytes(final long requestId, final byte[] payload) {
-        executor.execute(() -> {
-            try {
-                List<Connection> snapshot;
-                synchronized (gate) { snapshot = new ArrayList<>(connections.values()); }
-                byte[] data = payload == null ? new byte[0] : payload;
-                for (Connection connection : snapshot) connection.send(data);
-                complete(requestId, true, null);
-            } catch (Throwable t) {
-                complete(requestId, false, message(t));
-            }
-        });
+        List<Connection> snapshot;
+        synchronized (gate) { snapshot = new ArrayList<>(connections.values()); }
+        if (snapshot.isEmpty()) {
+            executor.execute(() -> complete(requestId, true, null));
+            return;
+        }
+
+        AtomicInteger remaining = new AtomicInteger(snapshot.size());
+        AtomicReference<Throwable> firstFailure = new AtomicReference<>();
+        for (Connection connection : snapshot) {
+            connection.enqueueSend(payload, failure -> {
+                if (failure != null) firstFailure.compareAndSet(null, failure);
+                if (remaining.decrementAndGet() == 0) {
+                    Throwable error = firstFailure.get();
+                    complete(requestId, error == null, error == null ? null : message(error));
+                }
+            });
+        }
     }
 
     public void disconnect(final long requestId, final String connectionId) {
@@ -228,6 +242,7 @@ public final class SolarBluetoothClassicBridge {
         final BluetoothSocket socket;
         final DataInputStream input;
         final DataOutputStream output;
+        final SolarSerialTaskQueue sendQueue;
         volatile boolean closed;
 
         Connection(String id, BluetoothSocket socket) throws IOException {
@@ -235,11 +250,29 @@ public final class SolarBluetoothClassicBridge {
             this.socket = socket;
             this.input = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             this.output = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+            this.sendQueue = new SolarSerialTaskQueue(executor);
         }
 
-        synchronized void send(byte[] payload) throws IOException {
+        void enqueueSend(byte[] payload, SendCompletion completion) {
+            byte[] data = payload == null ? new byte[0] : payload.clone();
+            if (data.length > MAX_MESSAGE_BYTES) {
+                completion.complete(new IOException("Bluetooth message exceeds limit"));
+                return;
+            }
+            boolean accepted = sendQueue.execute(() -> {
+                Throwable failure = null;
+                try {
+                    sendNow(data);
+                } catch (Throwable t) {
+                    failure = t;
+                }
+                completion.complete(failure);
+            });
+            if (!accepted) completion.complete(new IOException("Bluetooth connection is closed"));
+        }
+
+        private synchronized void sendNow(byte[] payload) throws IOException {
             if (closed) throw new IOException("Bluetooth connection is closed");
-            if (payload.length > MAX_MESSAGE_BYTES) throw new IOException("Bluetooth message exceeds limit");
             output.writeInt(payload.length);
             output.write(payload);
             output.flush();
@@ -263,10 +296,13 @@ public final class SolarBluetoothClassicBridge {
             }
         }
 
-        synchronized void close() {
-            if (closed) return;
-            closed = true;
-            closeQuietly(socket);
+        void close() {
+            sendQueue.close();
+            synchronized (this) {
+                if (closed) return;
+                closed = true;
+                closeQuietly(socket);
+            }
         }
     }
 }
