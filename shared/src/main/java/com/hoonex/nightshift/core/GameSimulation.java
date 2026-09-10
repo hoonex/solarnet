@@ -16,13 +16,16 @@ public final class GameSimulation {
 
     private final LinkedHashMap<Integer,Player> players=new LinkedHashMap<>();
     private final ArrayList<GameEvent> events=new ArrayList<>();
-    private final boolean[] breakers=new boolean[FacilityMap.BREAKERS.length];
+    private final ObjectiveProgress objectives=new ObjectiveProgress();
     private final int minimumPlayers;
 
     private long tick;
+    private long playTicks;
     private GameSnapshot.Phase phase=GameSnapshot.Phase.LOBBY;
     private int leaderPlayerId;
     private boolean exitUnlocked;
+    private boolean blackout;
+    private int huntSurgeTicks;
 
     private Vec2 monsterPos=FacilityMap.MONSTER_SPAWN;
     private GameSnapshot.MonsterMode monsterMode=GameSnapshot.MonsterMode.ROAM;
@@ -47,7 +50,9 @@ public final class GameSimulation {
     }
 
     public synchronized void removePlayer(int id){
-        if(players.remove(id)==null)return;
+        Player removed=players.remove(id);
+        if(removed==null)return;
+        if(removed.carriedFuseIndex>=0)objectives.returnFuse(removed.carriedFuseIndex);
         events.add(new GameEvent(tick,GameEvent.Type.PLAYER_LEFT,id,0));
         if(leaderPlayerId==id)leaderPlayerId=players.isEmpty()?0:players.keySet().iterator().next();
         if(phase==GameSnapshot.Phase.PLAYING)evaluateTerminalState();
@@ -83,9 +88,19 @@ public final class GameSimulation {
     public synchronized void tick(){
         tick++;
         if(phase!=GameSnapshot.Phase.PLAYING)return;
+        boolean beforeBlackout=blackout;
+        playTicks++;
+        HorrorDirector.State director=HorrorDirector.state(playTicks,objectives.poweredBreakers(),huntSurgeTicks);
+        blackout=director.blackout;
+        if(blackout!=beforeBlackout){
+            events.add(new GameEvent(tick,blackout?GameEvent.Type.BLACKOUT_STARTED:GameEvent.Type.BLACKOUT_ENDED,0,0));
+        }
         for(Player p:players.values())updatePlayer(p);
-        updateInteractions();updateMonster();
+        updateInteractions();
+        director=HorrorDirector.state(playTicks,objectives.poweredBreakers(),huntSurgeTicks);
+        updateMonster(director);
         if(monsterAttackCooldown>0)monsterAttackCooldown--;
+        if(huntSurgeTicks>0)huntSurgeTicks--;
         evaluateTerminalState();
     }
 
@@ -100,22 +115,39 @@ public final class GameSimulation {
     private void updateInteractions(){
         for(Player p:players.values()){
             if(p.downed||p.escaped||!p.input.interact)continue;
-            for(int i=0;i<breakers.length;i++){
-                if(!breakers[i]&&p.pos.distance(FacilityMap.BREAKERS[i])<=1.25){
-                    breakers[i]=true;
-                    events.add(new GameEvent(tick,GameEvent.Type.BREAKER_ACTIVATED,p.id,i));
-                    boolean all=true;for(boolean b:breakers)all&=b;
-                    if(all&&!exitUnlocked){
-                        exitUnlocked=true;
-                        events.add(new GameEvent(tick,GameEvent.Type.EXIT_UNLOCKED,p.id,0));
-                    }
+
+            if(objectives.tryRecoverKeycard(p.pos)){
+                events.add(new GameEvent(tick,GameEvent.Type.KEYCARD_RECOVERED,p.id,0));
+            }
+
+            if(p.carriedFuseIndex<0){
+                int fuse=objectives.tryTakeFuse(p.pos);
+                if(fuse>=0){
+                    p.carriedFuseIndex=fuse;
+                    events.add(new GameEvent(tick,GameEvent.Type.FUSE_PICKED,p.id,fuse));
                 }
+            }
+
+            int breaker=objectives.tryPowerBreaker(p.pos,p.carriedFuseIndex>=0);
+            if(breaker>=0){
+                int fuse=p.carriedFuseIndex;
+                p.carriedFuseIndex=-1;
+                events.add(new GameEvent(tick,GameEvent.Type.FUSE_INSERTED,p.id,fuse));
+                events.add(new GameEvent(tick,GameEvent.Type.BREAKER_ACTIVATED,p.id,breaker));
+                huntSurgeTicks=Math.max(huntSurgeTicks,HorrorDirector.BREAKER_SURGE_TICKS);
+                events.add(new GameEvent(tick,GameEvent.Type.HUNT_SURGE,p.id,breaker));
+            }
+
+            if(objectives.extractionReady()&&!exitUnlocked){
+                exitUnlocked=true;
+                events.add(new GameEvent(tick,GameEvent.Type.EXIT_UNLOCKED,p.id,0));
             }
             if(exitUnlocked&&p.pos.distance(FacilityMap.EXIT)<=1.45){
                 p.escaped=true;p.flashlightOn=false;
                 events.add(new GameEvent(tick,GameEvent.Type.PLAYER_ESCAPED,p.id,0));
             }
         }
+
         for(Player target:players.values()){
             if(!target.downed||target.escaped){target.reviveProgress=0;continue;}
             boolean helped=false;
@@ -131,16 +163,20 @@ public final class GameSimulation {
         }
     }
 
-    private void updateMonster(){
+    private void updateMonster(HorrorDirector.State director){
         Player visibleBest=null,heardBest=null;
         double visibleDistance=Double.MAX_VALUE,heardDistance=Double.MAX_VALUE;
         for(Player p:players.values()){
             if(p.downed||p.escaped)continue;
-            double d=monsterPos.distance(p.pos),vision=p.flashlightOn?12.0:8.5;
-            if(d<=vision&&FacilityMap.hasLineOfSight(monsterPos,p.pos)&&d<visibleDistance){visibleBest=p;visibleDistance=d;}
+            double d=monsterPos.distance(p.pos);
+            double vision=(p.flashlightOn?12.0:8.5)*director.monsterVisionMultiplier;
+            if(d<=vision&&FacilityMap.hasLineOfSight(monsterPos,p.pos)&&d<visibleDistance){
+                visibleBest=p;visibleDistance=d;
+            }
             double motion=Math.sqrt(p.input.forward*p.input.forward+p.input.strafe*p.input.strafe);
             boolean noisy=p.input.sprint&&motion>0.15;
-            if((noisy&&d<=14.0)||(p.input.interact&&d<=8.0)){
+            double hearing=director.monsterHearingMultiplier;
+            if((noisy&&d<=14.0*hearing)||(p.input.interact&&d<=8.0*hearing)){
                 if(d<heardDistance){heardBest=p;heardDistance=d;}
             }
         }
@@ -173,6 +209,7 @@ public final class GameSimulation {
             target=FacilityMap.PATROL[patrolIndex%FacilityMap.PATROL.length];speed=MONSTER_ROAM_SPEED;
             if(monsterPos.distance(target)<0.8)patrolIndex++;
         }
+        speed*=director.monsterSpeedMultiplier;
         Vec2 dir=target.subtract(monsterPos).normalized();
         monsterPos=FacilityMap.moveWithSlide(monsterPos,dir.scale(speed*DT),MONSTER_RADIUS);
 
@@ -204,14 +241,17 @@ public final class GameSimulation {
 
     public synchronized GameSnapshot snapshot(){
         ArrayList<GameSnapshot.PlayerView> views=new ArrayList<>();
+        HorrorDirector.State director=HorrorDirector.state(playTicks,objectives.poweredBreakers(),huntSurgeTicks);
         for(Player p:players.values()){
             double tension=p.downed||p.escaped?0.0:clamp01(1.0-monsterPos.distance(p.pos)/13.0);
             views.add(new GameSnapshot.PlayerView(p.id,p.name,p.pos.x,p.pos.z,p.yawRadians,
-                p.stamina,p.flashlightBattery,tension,p.flashlightOn,p.downed,p.escaped,p.ready,p.lastInputSequence));
+                p.stamina,p.flashlightBattery,tension,p.flashlightOn,p.downed,p.escaped,p.ready,
+                p.carriedFuseIndex>=0,p.lastInputSequence));
         }
         return new GameSnapshot(tick,phase,leaderPlayerId,views,
             new GameSnapshot.MonsterView(monsterPos.x,monsterPos.z,monsterMode,monsterTargetPlayerId),
-            breakers,exitUnlocked);
+            objectives.breakers(),objectives.fusesTaken(),objectives.keycardRecovered(),exitUnlocked,
+            director.blackout,director.threatLevel,huntSurgeTicks);
     }
 
     public synchronized List<GameEvent> drainEvents(){ArrayList<GameEvent> out=new ArrayList<>(events);events.clear();return out;}
@@ -222,7 +262,7 @@ public final class GameSimulation {
 
     private static final class Player{
         final int id;final String name;Vec2 pos;double yawRadians,stamina=1.0,flashlightBattery=1.0;
-        boolean flashlightOn,downed,escaped,ready;int reviveProgress,lastInputSequence;GameInput input=GameInput.IDLE;
+        boolean flashlightOn,downed,escaped,ready;int reviveProgress,lastInputSequence,carriedFuseIndex=-1;GameInput input=GameInput.IDLE;
         Player(int id,String name,Vec2 pos){this.id=id;this.name=name;this.pos=pos;}
     }
 }
