@@ -62,22 +62,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Verify standalone launcher source contract
+      - name: Verify standalone game-feel source contract
         run: |
-          grep -Fq 'PLAY SOLO' android/app/src/main/java/com/hoonex/nightshift/MainActivity.java
+          grep -Fq 'BEGIN SHIFT' android/app/src/main/java/com/hoonex/nightshift/MainActivity.java
           grep -Fq 'SoloGameActivity.class' android/app/src/main/java/com/hoonex/nightshift/MainActivity.java
           grep -Fq 'new SoloGameRuntime()' android/app/src/main/java/com/hoonex/nightshift/SoloGameActivity.java
+          grep -Fq 'new NightshiftAudio()' android/app/src/main/java/com/hoonex/nightshift/SoloGameActivity.java
+          grep -Fq 'new AtmosphereOverlay' android/app/src/main/java/com/hoonex/nightshift/SoloGameActivity.java
+          grep -Fq 'drawHunter' android/app/src/main/java/com/hoonex/nightshift/NightshiftRenderer.java
+          grep -Fq 'drawLockerBank' android/app/src/main/java/com/hoonex/nightshift/NightshiftRenderer.java
+          grep -Fq 'setMotionState' android/app/src/main/java/com/hoonex/nightshift/NightshiftGameView.java
           grep -Fq '.MultiplayerActivity' android/app/src/main/AndroidManifest.xml
       - name: Ensure Android 36 SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
       - name: Build Nightshift Android APK
         run: gradle -p android :app:assembleDebug --no-daemon --stacktrace
-      - name: Verify Nightshift 0.4.0 identity and permissions
+      - name: Verify Nightshift 0.5.0 identity and permissions
         run: |
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           "$AAPT" dump badging "$APK" | tee /tmp/nightshift-badging.txt
-          grep -Fq "package: name='com.hoonex.nightshift' versionCode='4' versionName='0.4.0'" /tmp/nightshift-badging.txt
+          grep -Fq "package: name='com.hoonex.nightshift' versionCode='5' versionName='0.5.0'" /tmp/nightshift-badging.txt
           grep -Fq "sdkVersion:'24'" /tmp/nightshift-badging.txt
           grep -Fq "application-label:'Nightshift'" /tmp/nightshift-badging.txt
           "$AAPT" dump permissions "$APK" | tee /tmp/nightshift-permissions.txt
@@ -89,13 +94,13 @@ jobs:
       - name: Stage APK and checksum
         run: |
           OUT="android/app/build/outputs/apk/debug"
-          cp "$OUT/app-debug.apk" "$OUT/nightshift-0.4.0-debug.apk"
+          cp "$OUT/app-debug.apk" "$OUT/nightshift-0.5.0-debug.apk"
           cd "$OUT"
-          sha256sum nightshift-0.4.0-debug.apk > nightshift-0.4.0-debug.apk.sha256
+          sha256sum nightshift-0.5.0-debug.apk > nightshift-0.5.0-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: nightshift-android-apk
           path: |
-            android/app/build/outputs/apk/debug/nightshift-0.4.0-debug.apk
-            android/app/build/outputs/apk/debug/nightshift-0.4.0-debug.apk.sha256
+            android/app/build/outputs/apk/debug/nightshift-0.5.0-debug.apk
+            android/app/build/outputs/apk/debug/nightshift-0.5.0-debug.apk.sha256
           retention-days: 14

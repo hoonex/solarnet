@@ -5,10 +5,12 @@ import com.hoonex.nightshift.core.*;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
@@ -29,9 +31,12 @@ public final class SoloGameActivity extends Activity {
 
     private SoloGameRuntime runtime;
     private NightshiftGameView gameView;
-    private TextView hud, banner, prompt, crosshair;
+    private NightshiftAudio audio;
+    private AtmosphereOverlay atmosphere;
+    private TextView hud, banner, prompt;
     private FrameLayout endPanel;
     private volatile boolean sprint, interact, flashlight = true, paused;
+    private volatile double movementAmount;
     private int bannerGeneration;
     private long roundStartNs;
     private GameSnapshot.Phase terminalShown;
@@ -40,8 +45,10 @@ public final class SoloGameActivity extends Activity {
         super.onCreate(state);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setStatusBarColor(Color.BLACK);
         runtime = new SoloGameRuntime();
+        audio = new NightshiftAudio();
         roundStartNs = System.nanoTime();
         setContentView(buildUi());
         GameSnapshot initial = runtime.snapshot();
@@ -53,33 +60,44 @@ public final class SoloGameActivity extends Activity {
 
     private View buildUi() {
         FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
         gameView = new NightshiftGameView(this);
         root.addView(gameView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+        atmosphere = new AtmosphereOverlay(this);
+        root.addView(atmosphere, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
         hud = new TextView(this);
-        hud.setTextColor(Color.WHITE); hud.setTextSize(13); hud.setShadowLayer(5, 0, 1, Color.BLACK);
-        hud.setPadding(dp(16), dp(10), dp(16), dp(10));
-        root.addView(hud, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.LEFT));
+        hud.setTextColor(Color.WHITE); hud.setTextSize(12); hud.setShadowLayer(5, 0, 1, Color.BLACK);
+        hud.setPadding(dp(14), dp(10), dp(14), dp(10));
+        hud.setBackground(panel(0xB0101517, 0x403E4B4F, 5));
+        FrameLayout.LayoutParams hp = new FrameLayout.LayoutParams(dp(520), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.LEFT);
+        hp.setMargins(dp(14), dp(12), 0, 0); root.addView(hud, hp);
 
         banner = new TextView(this);
-        banner.setTextColor(Color.WHITE); banner.setTextSize(20); banner.setGravity(Gravity.CENTER); banner.setShadowLayer(8, 0, 1, Color.BLACK);
-        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(620), dp(64), Gravity.TOP | Gravity.CENTER_HORIZONTAL); bp.topMargin = dp(18);
+        banner.setTextColor(Color.WHITE); banner.setTextSize(18); banner.setGravity(Gravity.CENTER); banner.setShadowLayer(8, 0, 1, Color.BLACK);
+        banner.setBackground(panel(0xA80A0E10, 0x557B1E1E, 5));
+        FrameLayout.LayoutParams bp = new FrameLayout.LayoutParams(dp(620), dp(58), Gravity.TOP | Gravity.CENTER_HORIZONTAL); bp.topMargin = dp(18);
         root.addView(banner, bp);
 
         prompt = new TextView(this);
-        prompt.setTextColor(Color.WHITE); prompt.setTextSize(16); prompt.setGravity(Gravity.CENTER); prompt.setShadowLayer(7, 0, 1, Color.BLACK);
-        FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(dp(700), dp(58), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL); pp.bottomMargin = dp(18);
+        prompt.setTextColor(Color.rgb(230, 236, 231)); prompt.setTextSize(14); prompt.setGravity(Gravity.CENTER); prompt.setShadowLayer(7, 0, 1, Color.BLACK);
+        prompt.setBackground(panel(0xA8070B0D, 0x403A474B, 5));
+        FrameLayout.LayoutParams pp = new FrameLayout.LayoutParams(dp(700), dp(50), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL); pp.bottomMargin = dp(16);
         root.addView(prompt, pp);
 
-        crosshair = new TextView(this);
-        crosshair.setText("+"); crosshair.setTextColor(Color.argb(210, 240, 245, 240)); crosshair.setTextSize(23); crosshair.setGravity(Gravity.CENTER);
-        root.addView(crosshair, new FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER));
+        TextView moveZone = new TextView(this);
+        moveZone.setText("MOVE\nDRAG"); moveZone.setGravity(Gravity.CENTER); moveZone.setTextSize(11); moveZone.setTextColor(Color.argb(115, 220, 230, 225));
+        GradientDrawable moveBg = new GradientDrawable(); moveBg.setShape(GradientDrawable.OVAL); moveBg.setColor(0x2210181B); moveBg.setStroke(dp(1), 0x4A9AABAA);
+        moveZone.setBackground(moveBg); moveZone.setClickable(false); moveZone.setFocusable(false);
+        FrameLayout.LayoutParams mz = new FrameLayout.LayoutParams(dp(106), dp(106), Gravity.BOTTOM | Gravity.LEFT); mz.setMargins(dp(26), 0, 0, dp(24));
+        root.addView(moveZone, mz);
 
-        Button run = button("RUN"), use = button("USE"), light = button("LIGHT"), menu = button("MENU");
-        addBottom(root, run, 332); addBottom(root, use, 226); addBottom(root, light, 120); addBottom(root, menu, 14);
-        run.setOnTouchListener((v, e) -> { sprint = held(e); return true; });
-        use.setOnTouchListener((v, e) -> { interact = held(e); return true; });
-        light.setOnClickListener(v -> { flashlight = !flashlight; light.setAlpha(flashlight ? 1f : .42f); });
+        Button run = button("RUN"), use = actionButton("USE"), light = button("LIGHT"), menu = button("MENU");
+        addBottom(root, run, 334, 92); addBottom(root, use, 224, 100); addBottom(root, light, 116, 92); addBottom(root, menu, 12, 92);
+        run.setOnTouchListener((v, e) -> { sprint = held(e); run.setAlpha(sprint ? 1f : .76f); return true; });
+        use.setOnTouchListener((v, e) -> { interact = held(e); use.setAlpha(interact ? 1f : .86f); return true; });
+        light.setOnClickListener(v -> { flashlight = !flashlight; light.setAlpha(flashlight ? .86f : .36f); });
         menu.setOnClickListener(v -> finish());
 
         endPanel = buildEndPanel();
@@ -90,29 +108,39 @@ public final class SoloGameActivity extends Activity {
 
     private FrameLayout buildEndPanel() {
         FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.argb(220, 1, 3, 4));
+        overlay.setBackgroundColor(Color.argb(232, 1, 3, 4));
         LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER); card.setPadding(dp(40), dp(30), dp(40), dp(30));
-        TextView result = new TextView(this); result.setTag("result"); result.setTextColor(Color.WHITE); result.setTextSize(34); result.setGravity(Gravity.CENTER);
+        card.setOrientation(LinearLayout.VERTICAL); card.setGravity(Gravity.CENTER); card.setPadding(dp(44), dp(32), dp(44), dp(32));
+        card.setBackground(panel(0xEE090D0F, 0x667B8788, 8));
+        TextView result = new TextView(this); result.setTag("result"); result.setTextColor(Color.WHITE); result.setTextSize(34); result.setLetterSpacing(.08f); result.setGravity(Gravity.CENTER);
         TextView detail = new TextView(this); detail.setTag("detail"); detail.setTextColor(Color.rgb(170, 185, 188)); detail.setTextSize(15); detail.setGravity(Gravity.CENTER); detail.setPadding(0, dp(10), 0, dp(22));
-        Button retry = button("RETRY"), menu = button("MAIN MENU");
+        Button retry = actionButton("RETRY SHIFT"), menu = button("MAIN MENU");
         card.addView(result, new LinearLayout.LayoutParams(dp(600), dp(70)));
         card.addView(detail, new LinearLayout.LayoutParams(dp(600), dp(70)));
         card.addView(retry, new LinearLayout.LayoutParams(dp(330), dp(58)));
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(dp(330), dp(54)); mp.topMargin = dp(10); card.addView(menu, mp);
         retry.setOnClickListener(v -> restartSolo());
         menu.setOnClickListener(v -> finish());
-        overlay.addView(card, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(dp(700), dp(340), Gravity.CENTER);
+        overlay.addView(card, cp);
         return overlay;
     }
 
     private void advanceGame() {
         if (paused || terminalShown != null || runtime == null || gameView == null) return;
-        SoloGameRuntime.Frame frame = runtime.step(gameView.forward(), gameView.strafe(), gameView.yaw(), sprint, interact, flashlight);
+        double forward = gameView.forward(), strafe = gameView.strafe();
+        double movement = Math.min(1.0, Math.sqrt(forward * forward + strafe * strafe));
+        movementAmount = movement;
+        gameView.setMotionState(movement, sprint);
+        SoloGameRuntime.Frame frame = runtime.step(forward, strafe, gameView.yaw(), sprint, interact, flashlight);
         gameView.setSnapshot(frame.snapshot);
         for (GameEvent event : frame.events) {
             String message = formatEvent(event.type);
-            if (message != null) uiHandler.post(() -> showBanner(message));
+            uiHandler.post(() -> {
+                if (message != null) showBanner(message);
+                audio.onEvent(event.type);
+                eventHaptic(event.type);
+            });
         }
         uiHandler.post(() -> updatePresentation(frame.snapshot));
     }
@@ -125,10 +153,12 @@ public final class SoloGameActivity extends Activity {
         String danger = me.tension > .72 ? "  ·  HUNTER CLOSE" : me.tension > .40 ? "  ·  STAY QUIET" : "";
         String carry = me.carryingFuse ? "  ·  FUSE CARRIED" : "";
         String powerOut = snapshot.blackout ? "  ·  BLACKOUT" : "";
-        hud.setText("SOLO  ·  " + mmss(seconds) + "  ·  POWER " + powered + "/3" +
+        hud.setText("NIGHTSHIFT // SOLO    " + mmss(seconds) + "\nPOWER " + powered + "/3" +
             (snapshot.keycardRecovered ? "  ·  KEYCARD ✓" : "  ·  KEYCARD ?") + carry + powerOut + danger +
             "\nSTAMINA " + Math.round(me.stamina * 100) + "%  ·  LIGHT " + Math.round(me.flashlightBattery * 100) + "%  ·  THREAT " + snapshot.threatLevel + "/5");
         prompt.setText(contextPrompt(snapshot, me));
+        atmosphere.setState(me, snapshot.blackout, movementAmount, sprint);
+        audio.onFrame(me, movementAmount > .08, sprint, snapshot.blackout);
 
         if ((snapshot.phase == GameSnapshot.Phase.WON || snapshot.phase == GameSnapshot.Phase.LOST) && terminalShown == null) {
             terminalShown = snapshot.phase;
@@ -166,10 +196,10 @@ public final class SoloGameActivity extends Activity {
         TextView detail = endPanel.findViewWithTag("detail");
         if (phase == GameSnapshot.Phase.WON) {
             result.setText("SHIFT SURVIVED");
-            detail.setText("You restored power and escaped in " + mmss(seconds) + ".");
+            detail.setText("Power restored. Security recovered. Extraction in " + mmss(seconds) + ".");
         } else {
             result.setText("YOU WERE TAKEN");
-            detail.setText("The hunter caught you. Move quieter, use walls, and save sprint for escapes.");
+            detail.setText("The hunter found you. Break line of sight, walk quietly, and save sprint for escape.");
         }
         endPanel.setVisibility(View.VISIBLE);
     }
@@ -198,10 +228,20 @@ public final class SoloGameActivity extends Activity {
         };
     }
 
+    private void eventHaptic(GameEvent.Type type) {
+        if (gameView == null) return;
+        switch (type) {
+            case HUNT_SURGE, BLACKOUT_STARTED, PLAYER_DOWNED -> gameView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            case FUSE_PICKED, KEYCARD_RECOVERED, BREAKER_ACTIVATED -> gameView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            default -> { }
+        }
+    }
+
     private void showBanner(String text) {
         int generation = ++bannerGeneration;
         banner.setText(text);
-        uiHandler.postDelayed(() -> { if (generation == bannerGeneration) banner.setText(""); }, 2200);
+        banner.setAlpha(1f);
+        uiHandler.postDelayed(() -> { if (generation == bannerGeneration) banner.animate().alpha(0f).setDuration(260).withEndAction(() -> banner.setText("")); }, 1900);
     }
 
     private static GameSnapshot.PlayerView player(GameSnapshot s, int id) {
@@ -215,11 +255,21 @@ public final class SoloGameActivity extends Activity {
     }
 
     private Button button(String label) {
-        Button b = new Button(this); b.setText(label); b.setTextColor(Color.WHITE); b.setBackgroundColor(Color.rgb(26, 34, 37)); b.setAlpha(.90f); return b;
+        Button b = new Button(this); b.setText(label); b.setTextSize(12); b.setTextColor(Color.rgb(225, 232, 228));
+        b.setBackground(panel(0xC7172023, 0x707D8A8C, 7)); b.setAlpha(.86f); return b;
     }
 
-    private void addBottom(FrameLayout root, View v, int rightMargin) {
-        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(dp(94), dp(56), Gravity.BOTTOM | Gravity.RIGHT);
+    private Button actionButton(String label) {
+        Button b = new Button(this); b.setText(label); b.setTextSize(13); b.setTextColor(Color.WHITE);
+        b.setBackground(panel(0xE53E1717, 0xA8A94A43, 7)); b.setAlpha(.92f); return b;
+    }
+
+    private GradientDrawable panel(int fill, int stroke, int radiusDp) {
+        GradientDrawable d = new GradientDrawable(); d.setColor(fill); d.setCornerRadius(dp(radiusDp)); d.setStroke(dp(1), stroke); return d;
+    }
+
+    private void addBottom(FrameLayout root, View v, int rightMargin, int width) {
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(dp(width), dp(56), Gravity.BOTTOM | Gravity.RIGHT);
         p.setMargins(dp(8), dp(8), dp(rightMargin), dp(12)); root.addView(v, p);
     }
 
@@ -230,14 +280,14 @@ public final class SoloGameActivity extends Activity {
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
     @Override protected void onResume() {
-        super.onResume(); paused = false; if (gameView != null) gameView.onResume();
+        super.onResume(); paused = false; if (gameView != null) gameView.onResume(); if (audio != null) audio.start();
     }
 
     @Override protected void onPause() {
-        paused = true; if (gameView != null) gameView.onPause(); super.onPause();
+        paused = true; if (audio != null) audio.pause(); if (gameView != null) gameView.onPause(); super.onPause();
     }
 
     @Override protected void onDestroy() {
-        gameLoop.shutdownNow(); uiHandler.removeCallbacksAndMessages(null); super.onDestroy();
+        gameLoop.shutdownNow(); uiHandler.removeCallbacksAndMessages(null); if (audio != null) audio.release(); super.onDestroy();
     }
 }

@@ -1,35 +1,42 @@
 # Nightshift
 
-Nightshift is a first-person horror game prototype for Android. **Single-player is now the primary standalone path:** install the APK, tap `PLAY SOLO`, and the full facility simulation runs in-process with no server address, room code, second device, or network connection.
+Nightshift is a standalone-first Android first-person horror game prototype with an optional experimental 1–4 player authority-server mode.
 
-## 0.4.0 — standalone playable build
+## 0.5.0 game-feel pass
 
-The launcher is now a real game menu rather than a server configuration screen. `PLAY SOLO` starts a local 20 Hz authoritative `GameSimulation` through `SoloGameRuntime`; multiplayer remains available as a separate experimental menu.
+0.5.0 focuses on the part that earlier builds were missing: the APK must present itself like a game, not like a networking demo.
 
-A solo round boots directly into gameplay. The player can walk/look/sprint, toggle the flashlight, pick up one fuse at a time, recover the security keycard, install fuses into three breakers, survive blackouts and hunter surges, unlock extraction, and either escape or get caught. The in-game HUD shows objective state, stamina, flashlight charge, threat, context-sensitive USE prompts, event banners, and an explicit win/loss screen with retry.
+The solo path still starts without a server, room code or second device, but the presentation layer is substantially richer:
 
-## Core loop
+- an enclosed industrial facility with perimeter walls, panel seams, service pipes/ducts, support columns, lockers, crates and extraction hazard markings;
+- objective props are modeled as recognizable fuse units, breaker cabinets, a security console/keycard and a mechanical extraction doorway;
+- the hunter is a multi-part animated creature silhouette with long limbs, head/jaw separation and emissive eyes instead of two red boxes;
+- surface-facing flashlight shading, deeper fog, blackout lighting, low-battery flashlight flicker, sprint FOV, head bob and hunt-surge camera shake;
+- screen-space vignette, threat pulse, scanlines and a movement-sensitive reticle;
+- procedural in-APK ambience, footsteps, heartbeat, pickup, breaker, danger and extraction cues plus event haptics;
+- a more game-like launch screen and in-game control/HUD styling.
 
-1. Tap `PLAY SOLO` from the launcher.
-2. Explore the facility and recover three physical fuses plus the security keycard.
-3. Carry one fuse at a time to an unpowered breaker and hold USE to restore it.
-4. Avoid the authoritative hunter; sprint and interaction noise can reveal you.
-5. Survive periodic blackouts and the surge triggered by restoring power.
-6. After all three breakers and the keycard are complete, reach the north extraction door and escape.
+All sound is synthesized locally by the Android client at runtime, so this pass does not add external audio licenses or asset-download dependencies.
+
+## Standalone core loop
+
+1. Launch the APK and choose **BEGIN SHIFT**.
+2. Drag on the left side to move and the right side to look.
+3. Search the facility for three fuses and the security keycard.
+4. Carry one fuse at a time to an unpowered breaker and hold **USE** to install it.
+5. Avoid the hunter; sprinting and interactions make you easier to find.
+6. Survive periodic blackouts and the hunt surge caused by restoring power.
+7. After all three breakers and the keycard are complete, reach the north extraction door and escape.
 
 ## Architecture
 
-- `shared/` — game rules, local solo runtime, objective/director state, facility geometry, snapshots and Protocol v3.
-- `android/` — standalone first-person game, main menu, optional multiplayer lobby, OpenGL ES presentation.
-- `server/` — optional Java 17 TCP authority for experimental 1–4 player multiplayer.
-- `tests/` — standalone runtime, simulation, protocol, prediction/interpolation and localhost multiplayer smoke tests.
+- `shared/` — authoritative game rules, objectives/director, facility collision, prediction/interpolation, snapshots and Protocol v3.
+- `server/` — Java 17 TCP authority for experimental multiplayer.
+- `android/` — standalone game runtime, first-person OpenGL ES 2 renderer, Android UI/audio and multiplayer client.
+- `tests/` — standalone/runtime/rule/protocol/prediction/interpolation and localhost TCP smoke tests.
 
-Single-player and multiplayer intentionally use the same `GameSimulation` rules. Solo does not fake or bypass the game: it owns an in-process authority and advances the same 20 Hz simulation without sockets.
-
-## Multiplayer
-
-`MULTIPLAYER · EXPERIMENTAL` opens the server lobby. That path still requires a reachable Nightshift authority server and keeps Protocol v3 prediction/reconciliation/reconnect behavior. Multiplayer is no longer required to launch or play the APK.
+Solo uses the same authoritative `GameSimulation` in-process at 20 Hz. Multiplayer keeps game truth on the server and retains the existing prediction/reconciliation and reconnect lease.
 
 ## Evidence boundary
 
-CI proves the standalone runtime boot/step contract, shared game tests, server tests, Android compilation, package/version identity, launcher source contract and APK generation. It does **not** prove real-phone control feel, final 3D art quality, frame pacing, thermal/power behavior, audio quality, or real WAN multiplayer quality. Those require physical-device/runtime testing.
+CI verifies shared/server compilation, standalone runtime behavior, existing multiplayer regression tests, Android compilation, package/version identity, absence of Bluetooth permissions and APK generation. CI cannot prove how 0.5.0 actually looks, sounds or controls on a physical phone. Real-device rendering, touch feel, audio output, frame pacing, thermal behavior and battery use remain device-unverified until exercised on hardware.
