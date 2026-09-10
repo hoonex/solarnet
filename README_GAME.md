@@ -1,10 +1,35 @@
 # Solar Arcade
 
-`android-smoke/grid-duel-game` now builds the **Solar Arcade** Android app.
+`android-smoke/grid-duel-game` builds the **Solar Arcade** Android app.
+
+## 02 — Relay Siege
+
+An original real-time two-lane deck strategy game built around card rotation, Flux trades, target rules, building pulls and defense-to-counterpush conversion.
+
+- 8-card decks, 4-card hand and visible next card
+- ground / air / splash / control / structure-priority interactions
+- deterministic information-fair AI
+- three starter archetypes with detailed deck guides
+- guide examples replayed by the real combat engine
+- AI practice arena
+
+### Deck Lab — Solar Arcade 0.4.0
+
+Deck Lab turns Relay Siege from fixed starter decks into a deck-building system.
+
+- build an ordered 8-card deck; slots 1–4 are the opening hand and slot 5 is the first NEXT card
+- reorder slots to deliberately shape opening and cycle order
+- duplicate cards are rejected
+- persistent local custom deck
+- average Flux and four-card-cycle metrics
+- structural coverage analysis for win conditions, anti-air, splash, defensive building pulls, frontline and control
+- human-readable strengths and weakness warnings
+- deterministic matchup probes against all three starter archetypes using the real `RelaySiegeGame` + `RelaySiegeAi`
+- direct AI playtest with the exact custom deck and exact slot order
 
 ## 01 — Pulse Hockey 3D
 
-The primary game is a real OpenGL ES 3D turn-based air-hockey / tactics hybrid.
+A real OpenGL ES 3D turn-based air-hockey / tactics hybrid.
 
 - AI Battle and same-phone Local 2P
 - drag to aim and choose shot strength
@@ -26,6 +51,6 @@ CI produces the installable debug artifact:
 
 `solar-arcade-android-game-apk`
 
-Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.2.0 uses versionCode 2.
+Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.4.0 uses versionCode 4.
 
-See `docs/pulse-hockey-3d.md` and `docs/grid-duel-android-game.md` for rules and evidence boundaries.
+CI proves source-level game tests, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.
