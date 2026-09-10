@@ -60,9 +60,17 @@ public final class SolarArcadeActivity extends Activity {
                 "02",
                 "RELAY SIEGE",
                 "2라인 실시간 덱 전략 · Flux · 어그로 · 역공",
-                "3 DECKS · AI · LIVE DECK GUIDE · REAL ENGINE REPLAY",
+                "3 STARTER DECKS · AI · LIVE DECK GUIDE · REAL ENGINE REPLAY",
                 GREEN,
                 v -> startActivity(new Intent(this, RelaySiegeActivity.class))));
+
+        root.addView(gameCard(
+                "LAB",
+                "RELAY SIEGE · DECK LAB",
+                "8장과 순서까지 직접 설계하고 구조적 빈틈을 분석",
+                "CUSTOM DECK · 4-CARD CYCLE · MATCHUP PROBE · CUSTOM AI PLAYTEST",
+                CYAN,
+                v -> startActivity(new Intent(this, RelaySiegeDeckLabActivity.class))));
 
         root.addView(gameCard(
                 "01",
@@ -86,7 +94,7 @@ public final class SolarArcadeActivity extends Activity {
                 v -> startActivity(new Intent(this, MainActivity.class))));
 
         TextView footer = text(
-                "Relay Siege의 덱 가이드 전투 예시는 실제 게임 엔진과 같은 규칙으로 재생됩니다.",
+                "Relay Siege의 덱 가이드와 Deck Lab matchup probe는 실제 게임 엔진과 같은 규칙으로 계산됩니다.",
                 12,
                 MUTED,
                 false);
