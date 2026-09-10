@@ -2,46 +2,60 @@
 
 ## Authority rule
 
-The server owns every state that can affect fairness or completion:
+The server owns every state that affects fairness or completion: collision-resolved position, stamina/battery, lobby phase, objectives, down/revive/escape, hunter sensing/AI/attacks and terminal result. Clients submit only movement axes, yaw, sprint, interaction and desired flashlight state.
 
-- player world position after movement/collision resolution
-- stamina and flashlight battery
-- ready/start phase
-- breaker state and extraction unlock
-- down/revive/escape state
-- hunter sensing, target selection, movement and attacks
-- match terminal state
+## Protocol v2 / 0.2.0
 
-Clients own only presentation and submit intent: movement axes, yaw, sprint, interact and desired flashlight state.
+Frames remain `int32 length + binary payload` on a persistent TCP connection.
 
-## v0.1 transport
-
-A persistent TCP stream is used deliberately for the first playable foundation. Each frame is `int32 length + binary protocol payload`; the payload has a magic/version/type header. TCP gives reliable ordered lobby/control messages without Bluetooth, Nearby, peer-host migration or NAT-to-NAT assumptions.
-
-- server simulation: 20 Hz fixed tick
-- server snapshots: 10 Hz
+- server simulation: 20 Hz
+- snapshots: 10 Hz
 - client input: 20 Hz
-- room size: 1–4 players
-- room codes: six characters, excluding ambiguous glyphs
-- session authentication: random per-player 64-bit token scoped to the room process
-- protocol version: 1 (`NSH1`)
+- room size: 1–4
+- room code: six characters
+- room-scoped random 64-bit session token
+- protocol: v2 (`NSH1` magic + version field)
 
-This is not claimed to be the final latency architecture. If real Internet testing shows head-of-line stalls are material, movement/snapshot traffic can move to UDP/QUIC while keeping the same authority boundary and room/game APIs.
+Protocol v2 adds two network-feel primitives:
 
-## Trust boundary
+1. every player snapshot includes `lastInputSequence`, the newest input accepted by the authority;
+2. `RESUME` authenticates an existing room/player/token during a short reconnect lease.
 
-A client cannot submit its own position, breaker completion, revive result, monster position, damage/down result or match win. Inputs are sequence-checked inside the simulation so an older movement command cannot overwrite a newer one.
+The wire version changed because the snapshot layout and message set changed. A v1 client/server pair is intentionally rejected rather than silently mis-decoding state.
 
-## Reconnect and production gaps
+## Local prediction and reconciliation
 
-v0.1 intentionally does not claim seamless reconnect. Socket loss removes the player from the room. Production work still needs:
+Player locomotion lives in the shared `PlayerMotion` owner. The server uses that step for truth and the Android presentation layer uses it for immediate local prediction.
 
-- authenticated identity and reconnect lease
-- TLS or a secure tunnel around the authority port
-- public room/matchmaking service
-- server deployment/health supervision
-- snapshot interpolation and local movement prediction
-- bandwidth/latency/loss instrumentation
-- abuse/rate limiting and stronger session tokens
+On an authoritative snapshot, the client:
 
-These are explicit milestones, not hidden assumptions.
+1. removes pending inputs whose sequence is acknowledged;
+2. rebuilds from authoritative position/stamina/battery;
+3. replays remaining unacknowledged inputs;
+4. hard-snaps only for a large divergence; otherwise visual correction decays over a short bounded interval.
+
+This reduces perceived local control latency without transferring authority to the client. Because TCP scheduling and server tick/input arrival can differ, prediction is not claimed bit-identical under arbitrary WAN loss; reconciliation is the correctness boundary.
+
+## Remote interpolation
+
+Remote players and the hunter are rendered one 10 Hz snapshot interval behind the newest authority state. They interpolate between the two newest snapshots and never extrapolate beyond the newest one. This deliberately trades about one snapshot of presentation latency for lower visible jitter.
+
+## Reconnect lease
+
+An unexpected transport loss does not immediately delete the player. The room reserves the player ID/token for 200 server ticks (10 seconds), neutralizes movement/interaction input and turns off the authoritative flashlight intent. The Android client makes a finite reconnect sequence and sends `RESUME`.
+
+An explicit leave removes the player immediately. If the lease expires, the server removes the reserved player and normal room/terminal-state rules apply.
+
+## Remaining production gaps
+
+0.2.0 does not prove or provide:
+
+- measured real WAN latency/jitter/loss quality
+- TLS / production authentication
+- public matchmaking
+- relay/NAT traversal
+- process-loss reconnect persistence
+- DDoS/abuse rate limiting
+- production observability
+
+A future transport may use UDP/QUIC for movement/snapshots while preserving these authority and reconciliation boundaries.
