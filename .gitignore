@@ -1,10 +1,12 @@
-bin/
-obj/
-.vs/
+# Java / Android
+.gradle/
+**/build/
+*.class
+*.jar
+local.properties
 .idea/
-*.user
-*.suo
-Library/
-Temp/
-Logs/
-UserSettings/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
