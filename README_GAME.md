@@ -13,7 +13,21 @@ An original real-time two-lane deck strategy game built around card rotation, Fl
 - guide examples replayed by the real combat engine
 - AI practice arena
 
-### Tactical Trainer — Solar Arcade 0.5.0
+### Cycle Lab — Solar Arcade 0.6.0
+
+Cycle Lab makes exact hand order and resource timing visible instead of reducing cycle to one average number.
+
+- reads the exact ordered 8-card deck, including the persistent Deck Lab custom deck
+- opening slots 1–4 are analyzed as **spend now → recover later** routes
+- slots 5–8 are analyzed as **draw-in** routes from the current opening hand and NEXT card
+- every route uses the real `RelaySiegeGame.tryPlay()`, `getHand()`, `getNextCard()` and real Flux regeneration
+- card-count distance is therefore locked to the gameplay hand-cycle implementation, not copied into a UI-only ruleset
+- Flux/time evidence follows a deterministic cheapest-first cycle discipline and is labeled as that policy rather than claimed as a global optimum
+- the route exposes the played-card sequence, final ready hand and next card
+- CI proves the current slot invariant: after spending an opening-hand card, slot 1 returns after 4 additional plays while slot 4 returns after 7; future slot 5 draws after one play and slot 8 after four
+- dedicated Cycle Lab CI reruns all starter decks twice and requires identical sequences, Flux, timing and canonical final state
+
+### Tactical Trainer — Solar Arcade 0.5.0+
 
 Tactical Trainer turns deck-guide advice into measured decisions instead of static tips.
 
@@ -64,6 +78,6 @@ CI produces the installable debug artifact:
 
 `solar-arcade-android-game-apk`
 
-Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.5.0 uses versionCode 5.
+Application ID remains `com.hoonex.solarnet.gridduel`; Solar Arcade 0.6.0 uses versionCode 6.
 
-CI proves source-level game tests, Tactical Trainer outcome/replay agreement, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.
+CI proves source-level game tests, Tactical Trainer outcome/replay agreement, Cycle Lab exact-hand invariants, Android compilation, package identity, checksum generation and APK artifact creation. Real-phone touch ergonomics, rendering appearance, frame pacing, thermal and power remain separate device evidence.

@@ -100,7 +100,7 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/PulseHockeyAi.java \
             android-smoke/game-tests/PulseHockeyGameSmoke.java
           java -cp /tmp/pulse-hockey com.hoonex.solarnet.gridduel.PulseHockeyGameSmoke
-      - name: Run Relay Siege combat, guide, AI, Deck Lab and Tactical Trainer smoke tests
+      - name: Run Relay Siege combat, guide, AI, Deck Lab, Tactical Trainer and Cycle Lab smoke tests
         run: |
           rm -rf /tmp/relay-siege && mkdir -p /tmp/relay-siege
           javac -d /tmp/relay-siege \
@@ -111,16 +111,19 @@ jobs:
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeDeckLab.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalTrainer.java \
             android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeTacticalReplay.java \
+            android-smoke/grid-duel-game/src/main/java/com/hoonex/solarnet/gridduel/RelaySiegeCycleLab.java \
             android-smoke/game-tests/RelaySiegeGameSmoke.java \
             android-smoke/game-tests/RelaySiegeAiSmoke.java \
             android-smoke/game-tests/RelaySiegeDeckLabSmoke.java \
             android-smoke/game-tests/RelaySiegeTacticalTrainerSmoke.java \
-            android-smoke/game-tests/RelaySiegeTacticalReplaySmoke.java
+            android-smoke/game-tests/RelaySiegeTacticalReplaySmoke.java \
+            android-smoke/game-tests/RelaySiegeCycleLabSmoke.java
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeGameSmoke
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeAiSmoke
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeDeckLabSmoke
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeTacticalTrainerSmoke
           java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeTacticalReplaySmoke
+          java -cp /tmp/relay-siege com.hoonex.solarnet.gridduel.RelaySiegeCycleLabSmoke
       - name: Compile Nearby Android library
         run: gradle -p android-smoke :solarnet-nearby:assembleDebug --no-daemon --stacktrace
       - name: Compile Bluetooth Classic Android library
@@ -157,12 +160,12 @@ jobs:
           retention-days: 14
       - name: Build Solar Arcade Android APK
         run: gradle -p android-smoke :grid-duel-game:assembleDebug --no-daemon --stacktrace
-      - name: Verify Solar Arcade 0.5.0 APK identity
+      - name: Verify Solar Arcade 0.6.0 APK identity
         run: |
           APK="android-smoke/grid-duel-game/build/outputs/apk/debug/grid-duel-game-debug.apk"
           AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
           "$AAPT" dump badging "$APK" | tee /tmp/solar-arcade-badging.txt
-          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='5' versionName='0.5.0'" /tmp/solar-arcade-badging.txt
+          grep -Fq "package: name='com.hoonex.solarnet.gridduel' versionCode='6' versionName='0.6.0'" /tmp/solar-arcade-badging.txt
           grep -Fq "sdkVersion:'24'" /tmp/solar-arcade-badging.txt
           grep -Fq "application-label:'Solar Arcade'" /tmp/solar-arcade-badging.txt
           "$AAPT" dump permissions "$APK" | tee /tmp/solar-arcade-permissions.txt
@@ -172,14 +175,14 @@ jobs:
       - name: Stage Solar Arcade APK and checksum
         run: |
           OUT="android-smoke/grid-duel-game/build/outputs/apk/debug"
-          cp "$OUT/grid-duel-game-debug.apk" "$OUT/solar-arcade-0.5.0-debug.apk"
+          cp "$OUT/grid-duel-game-debug.apk" "$OUT/solar-arcade-0.6.0-debug.apk"
           cd "$OUT"
-          sha256sum solar-arcade-0.5.0-debug.apk > solar-arcade-0.5.0-debug.apk.sha256
+          sha256sum solar-arcade-0.6.0-debug.apk > solar-arcade-0.6.0-debug.apk.sha256
       - name: Upload Solar Arcade APK
         uses: actions/upload-artifact@v4
         with:
           name: solar-arcade-android-game-apk
           path: |
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.5.0-debug.apk
-            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.5.0-debug.apk.sha256
+            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.0-debug.apk
+            android-smoke/grid-duel-game/build/outputs/apk/debug/solar-arcade-0.6.0-debug.apk.sha256
           retention-days: 14

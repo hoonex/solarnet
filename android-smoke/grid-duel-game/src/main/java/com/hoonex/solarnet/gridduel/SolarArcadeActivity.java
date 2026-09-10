@@ -73,6 +73,14 @@ public final class SolarArcadeActivity extends Activity {
                 v -> startActivity(new Intent(this, RelaySiegeDeckLabActivity.class))));
 
         root.addView(gameCard(
+                "CYCLE",
+                "RELAY SIEGE · CYCLE LAB",
+                "현재 HAND/NEXT에서 핵심 카드의 실제 복귀 창을 추적",
+                "EXACT HAND · DRAW-IN · SPEND→RETURN · REAL FLUX TIMING",
+                MOON,
+                v -> startActivity(new Intent(this, RelaySiegeCycleLabActivity.class))));
+
+        root.addView(gameCard(
                 "01",
                 "PULSE HOCKEY 3D",
                 "3D 턴제 에어하키 × 전술 전투",
@@ -94,7 +102,7 @@ public final class SolarArcadeActivity extends Activity {
                 v -> startActivity(new Intent(this, MainActivity.class))));
 
         TextView footer = text(
-                "Relay Siege의 덱 가이드와 Deck Lab matchup probe는 실제 게임 엔진과 같은 규칙으로 계산됩니다.",
+                "Relay Siege의 가이드, Deck Lab probe와 Cycle Lab은 실제 게임 엔진의 규칙/손패 상태를 기준으로 계산됩니다.",
                 12,
                 MUTED,
                 false);
