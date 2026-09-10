@@ -18,6 +18,7 @@ public final class NightshiftGameView extends GLSurfaceView {
     void setSnapshot(GameSnapshot snapshot){renderer.setSnapshot(snapshot);}
     void setLocalPlayerId(int id){renderer.setLocalPlayerId(id);}
     void applyLocalInput(GameInput input){renderer.applyLocalInput(input);}
+    void setMotionState(double movement,boolean sprinting){renderer.setMotionState(movement,sprinting);}
     double forward(){return forward;}double strafe(){return strafe;}double yaw(){return yaw;}
 
     @Override public boolean onTouchEvent(MotionEvent e){
@@ -32,7 +33,7 @@ public final class NightshiftGameView extends GLSurfaceView {
                 if(id==movePointer){
                     float r=Math.max(90f,getWidth()*.11f);strafe=clamp((x-moveStartX)/r,-1,1);forward=clamp((moveStartY-y)/r,-1,1);
                 }else if(id==lookPointer){
-                    yaw+=(x-lookLastX)*.0065;pitch=clamp(pitch-(y-lookLastY)*.0048,-.75,.75);
+                    yaw+=(x-lookLastX)*.0060;pitch=clamp(pitch-(y-lookLastY)*.0045,-.78,.78);
                     lookLastX=x;lookLastY=y;renderer.setPitch((float)pitch);renderer.setLocalYaw((float)yaw);
                 }
             }
