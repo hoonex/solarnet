@@ -60,9 +60,9 @@ public final class SolarArcadeActivity extends Activity {
                 "02",
                 "RELAY SIEGE",
                 "2라인 실시간 덱 전략 · Flux · 어그로 · 역공",
-                "3 DECKS · AI · LIVE DECK GUIDE · REAL ENGINE REPLAY",
+                "3 DECKS · AI · LIVE GUIDE · BLUETOOTH 2P",
                 GREEN,
-                v -> startActivity(new Intent(this, RelaySiegeActivity.class))));
+                v -> startActivity(new Intent(this, RelaySiegeHubActivity.class))));
 
         root.addView(gameCard(
                 "01",
