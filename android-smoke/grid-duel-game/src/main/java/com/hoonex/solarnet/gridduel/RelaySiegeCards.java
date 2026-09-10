@@ -3,9 +3,11 @@ package com.hoonex.solarnet.gridduel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Canonical card/deck catalog for Relay Siege. Rules data lives here, not in UI code. */
 public final class RelaySiegeCards {
@@ -206,6 +208,29 @@ public final class RelaySiegeCards {
         Deck deck = DECKS.get(id);
         if (deck == null) throw new IllegalArgumentException("Unknown Relay Siege deck: " + id);
         return deck;
+    }
+
+    /** Creates an ephemeral ordered deck for Deck Lab/playtest use without mutating the canonical catalog. */
+    public static Deck customDeck(String id, String name, List<String> orderedCardIds) {
+        if (orderedCardIds == null || orderedCardIds.size() != 8)
+            throw new IllegalArgumentException("Relay Siege custom decks require exactly 8 cards");
+        Set<String> unique = new HashSet<>();
+        String[] ids = new String[8];
+        for (int i = 0; i < orderedCardIds.size(); i++) {
+            String cardId = orderedCardIds.get(i);
+            card(cardId);
+            if (!unique.add(cardId)) throw new IllegalArgumentException("Duplicate custom deck card: " + cardId);
+            ids[i] = cardId;
+        }
+        String safeId = id == null || id.trim().isEmpty() ? "custom" : id.trim();
+        String safeName = name == null || name.trim().isEmpty() ? "Custom Deck" : name.trim();
+        return new Deck(
+                safeId,
+                safeName,
+                "Custom Deck",
+                "Player-built deck. Opening hand and card order follow the exact Deck Lab slot order.",
+                "Use Deck Lab coverage warnings and real-engine matchup probes to identify structural gaps.",
+                ids);
     }
 
     public static List<Card> allCards() {
