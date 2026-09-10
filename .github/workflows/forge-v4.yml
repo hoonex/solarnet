@@ -1,0 +1,23 @@
+name: Forge v4 benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'Packages/com.hoonex.solarnet/Runtime/Turns/TurnCoordinator.cs'
+      - 'benchmarks/forge-v4/**'
+      - '.github/workflows/forge-v4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sequence-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run SolarNet sequence-frontier benchmark
+        run: dotnet run --project benchmarks/forge-v4/ForgeV4.csproj --configuration Release --nologo

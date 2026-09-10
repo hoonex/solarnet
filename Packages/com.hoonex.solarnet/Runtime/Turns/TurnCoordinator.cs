@@ -100,6 +100,16 @@ namespace SolarNet.Turns
 
         public static TurnCoordinator Restore(IList<string> players, long nextTurnIndex, string currentPlayerId, int round)
         {
+            return Restore(players, nextTurnIndex, currentPlayerId, round, null);
+        }
+
+        public static TurnCoordinator Restore(
+            IList<string> players,
+            long nextTurnIndex,
+            string currentPlayerId,
+            int round,
+            IReadOnlyDictionary<string, long> acceptedSequences)
+        {
             if (nextTurnIndex < 0) throw new ArgumentOutOfRangeException(nameof(nextTurnIndex));
             if (string.IsNullOrWhiteSpace(currentPlayerId)) throw new ArgumentException("Current player ID is required.", nameof(currentPlayerId));
             if (round < 1) throw new ArgumentOutOfRangeException(nameof(round));
@@ -113,10 +123,27 @@ namespace SolarNet.Turns
             if ((int)expectedRoundLong != round)
                 throw new ArgumentException("Round does not match the supplied turn index and player order.", nameof(round));
 
+            if (acceptedSequences != null)
+            {
+                foreach (var pair in acceptedSequences)
+                {
+                    if (string.IsNullOrWhiteSpace(pair.Key) || !coordinator._playerSet.Contains(pair.Key))
+                        throw new ArgumentException("Accepted sequence frontier contains an unknown player: " + pair.Key, nameof(acceptedSequences));
+                    if (pair.Value < 0)
+                        throw new ArgumentOutOfRangeException(nameof(acceptedSequences), "Accepted sequence frontier values cannot be negative.");
+                    coordinator._lastAcceptedSequence.Add(pair.Key, pair.Value);
+                }
+            }
+
             coordinator.TurnIndex = nextTurnIndex;
             coordinator.Round = round;
             coordinator._activePlayerIndex = expectedIndex;
             return coordinator;
+        }
+
+        public IReadOnlyDictionary<string, long> CaptureAcceptedSequences()
+        {
+            return new Dictionary<string, long>(_lastAcceptedSequence, StringComparer.Ordinal);
         }
 
         public bool IsKnownPlayer(string peerId)
